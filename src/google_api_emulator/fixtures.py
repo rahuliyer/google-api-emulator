@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from google_api_emulator.db import Database
+from google_api_emulator.services.gmail.mime import build_rfc822, parse_date
 from google_api_emulator.services.people.person import dump_person, ensure_person
 
 
 class UserFixture(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     id: str
     email: str
@@ -27,6 +27,70 @@ class PeopleFixtureFile(BaseModel):
 
 class AllowedTokensFile(BaseModel):
     tokens: list[str] = Field(default_factory=list)
+
+
+class GmailAttachmentFixture(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    filename: str
+    mimeType: str = "application/octet-stream"
+    text: str | None = None
+    data: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "filename": self.filename,
+            "mimeType": self.mimeType,
+            "text": self.text,
+            "data": self.data,
+        }
+
+
+class GmailMessageFixture(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: str | None = None
+    threadId: str | None = None
+    labelIds: list[str] = Field(default_factory=lambda: ["INBOX"])
+    from_: str = Field(default="noreply@example.com", alias="from")
+    to: list[str] | str = Field(default_factory=list)
+    cc: list[str] | str | None = None
+    bcc: list[str] | str | None = None
+    subject: str = ""
+    body: str = ""
+    date: str | None = None
+    attachments: list[GmailAttachmentFixture] = Field(default_factory=list)
+
+
+class GmailDraftFixture(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: str | None = None
+    from_: str | None = Field(default=None, alias="from")
+    to: list[str] | str | None = None
+    subject: str = ""
+    body: str = ""
+    attachments: list[GmailAttachmentFixture] = Field(default_factory=list)
+
+
+class GmailLabelFixture(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: str | None = None
+    name: str
+
+
+class GmailUserFixture(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    email: str
+    labels: list[GmailLabelFixture] = Field(default_factory=list)
+    messages: list[GmailMessageFixture] = Field(default_factory=list)
+    drafts: list[GmailDraftFixture] = Field(default_factory=list)
+
+
+class GmailFixtureFile(BaseModel):
+    users: list[GmailUserFixture] = Field(default_factory=list)
 
 
 def load_allowed_tokens(fixtures_dir: Path) -> set[str] | None:
@@ -84,3 +148,72 @@ def seed_people(db: Database, fixture: PeopleFixtureFile) -> None:
                     (person["resourceName"], user.id, "other_contact", person["etag"], dump_person(person)),
                 )
         conn.commit()
+
+
+def load_gmail_fixture(fixtures_dir: Path) -> GmailFixtureFile | None:
+    path = fixtures_dir / "gmail.json"
+    if not path.is_file():
+        return None
+    return GmailFixtureFile.model_validate_json(path.read_text())
+
+
+def seed_gmail(db: Database, fixture: GmailFixtureFile | None) -> None:
+    from google_api_emulator.services.gmail.store import GmailStore
+
+    store = GmailStore(db)
+    users = db.fetchall("SELECT id, email FROM users")
+    by_email = {row["email"].lower(): row["id"] for row in users}
+    for user in users:
+        store.ensure_mailbox(user["id"])
+    if fixture is None:
+        return
+    for mailbox in fixture.users:
+        user_id = by_email.get(mailbox.email.lower())
+        if user_id is None:
+            continue
+        store.ensure_mailbox(user_id)
+        for label in mailbox.labels:
+            body: dict = {"name": label.name}
+            if label.id:
+                body["id"] = label.id
+            store.create_label(user_id, body)
+        for message in mailbox.messages:
+            raw = build_rfc822(
+                from_addr=message.from_,
+                to=message.to,
+                subject=message.subject,
+                body=message.body,
+                date=parse_date(message.date),
+                cc=message.cc,
+                bcc=message.bcc,
+                attachments=[item.as_dict() for item in message.attachments],
+            )
+            store.insert_message(
+                user_id,
+                raw=raw,
+                label_ids=list(message.labelIds),
+                thread_id=message.threadId,
+                message_id=message.id,
+            )
+        for draft in mailbox.drafts:
+            raw = build_rfc822(
+                from_addr=draft.from_ or mailbox.email,
+                to=draft.to or [],
+                subject=draft.subject,
+                body=draft.body,
+                attachments=[item.as_dict() for item in draft.attachments],
+            )
+            resource = store.insert_message(
+                user_id,
+                raw=raw,
+                label_ids=["DRAFT"],
+            )
+            draft_id = draft.id or f"r-{resource_id(resource)}"
+            db.execute(
+                "INSERT INTO gmail_drafts (id, user_id, message_id) VALUES (?, ?, ?)",
+                (draft_id, user_id, resource["id"]),
+            )
+
+
+def resource_id(resource: dict) -> str:
+    return resource["id"][:12]

@@ -6,7 +6,7 @@ Guidance for coding agents working in this repository.
 
 A local Google API emulator for testing agents. Swap the Google host for this process; keep official REST paths, camelCase JSON, field masks, etags, and Google error envelopes.
 
-People API is implemented. Gmail and Calendar are planned, not implemented.
+People and Gmail are implemented. Calendar is planned, not implemented.
 
 ## Commands
 
@@ -20,7 +20,7 @@ Python ≥ 3.12. Package manager is **uv**. Do not add Poetry/pipenv.
 
 ## Verification
 
-`uv run pytest` is not enough after People (or other Google) route changes. Start uvicorn and drive it with `google-api-python-client`. `TestClient` never hits colon-method URLs the way the official client does (`people:batchGet`, `alt=json`, Bearer from `Credentials`).
+`uv run pytest` is not enough after People or Gmail route changes. Start uvicorn and drive it with `google-api-python-client`. `TestClient` never hits official-client URL encoding (`alt=json`, Bearer from `Credentials`) the same way.
 
 ### 1. Fixture in `/tmp`
 
@@ -31,6 +31,8 @@ mkdir -p /tmp/google_api_emulator_fixtures
 ```
 
 `/tmp/google_api_emulator_fixtures/people.json` should include at least: one user with `tokens`, a `profile`, two contacts with names/emails, and one `otherContacts` entry.
+
+`/tmp/google_api_emulator_fixtures/gmail.json` should include that user’s email, at least two messages (one `UNREAD`), a draft, and `attachments` on a message (`filename`, `mimeType`, plus `text` or base64 `data`). Mailboxes are keyed by email matching a People user.
 
 ### 2. Start the emulator
 
@@ -61,11 +63,19 @@ people = build(
     credentials=Credentials(token="verify-token"),  # must send Bearer; AnonymousCredentials will 401
     client_options={"api_endpoint": "http://127.0.0.1:18080/services/people"},
 )
+gmail = build(
+    "gmail",
+    "v1",
+    credentials=Credentials(token="verify-token"),
+    client_options={"api_endpoint": "http://127.0.0.1:18080/services/gmail"},
+)
 ```
 
 `api_endpoint` with or without a trailing slash both work. Do not use `AnonymousCredentials` — the emulator requires `Authorization: Bearer`.
 
 ### 4. Checks that must pass
+
+People:
 
 - `people.people().connections().list(resourceName="people/me", personFields="names,emailAddresses")` returns fixture contacts
 - `people.people().get(resourceName="people/me", personFields="names")` is the fixture profile
@@ -75,15 +85,27 @@ people = build(
 - `createContact` → `updateContact` with returned etag → stale etag is `HttpError` 400 → `deleteContact` → `get` is 404
 - Request without `Authorization` to `/services/people/v1/people/me?personFields=names` is 401 `UNAUTHENTICATED`
 
-Stop the server when done. Do not leave uvicorn on 18080.
+Gmail:
 
-For a new API, repeat this with that API’s `googleapiclient` service and `/services/{name}` endpoint.
+- `gmail.users().getProfile(userId="me")` returns the fixture email
+- `gmail.users().messages().list(userId="me")` returns fixture message ids (`id` + `threadId` only)
+- `gmail.users().messages().get(userId="me", id=..., format="full")` and `format="raw"`
+- Fixture attachment: `messages.get(format="full")` exposes `body.attachmentId`; `messages.attachments().get` returns the fixture bytes
+- `gmail.users().messages().list(userId="me", q="is:unread")` filters unread
+- `messages.send` with base64url RFC822 → `SENT`; stale-free `trash` then `untrash`
+- Send an RFC822 with `add_attachment`; `messages.get(format="full")` then `attachments.get` returns those bytes
+- `gmail.users().labels().list(userId="me")` includes system labels plus fixture user labels
+- `drafts.create` then `drafts.send`
+- Request without `Authorization` to `/services/gmail/gmail/v1/users/me/profile` is 401 `UNAUTHENTICATED`
+
+Stop the server when done. Do not leave uvicorn on 18080.
 
 ## Layout
 
 - `src/google_api_emulator/` — app, auth, SQLite, fixture loader, admin (`/health`, `POST /reset`)
 - `src/google_api_emulator/services/people/` — People routes, store, field masks, search
-- `fixtures/people.json` — People seed (one file per API: `fixtures/{api}.json`)
+- `src/google_api_emulator/services/gmail/` — Gmail routes, MIME, mailbox store
+- `fixtures/people.json`, `fixtures/gmail.json` — per-API seeds
 - `tests/` — pytest + httpx `TestClient`
 
 New Google APIs go in `services/{name}/` and mount at `/services/{name}` with Google’s published path after that prefix:
@@ -105,8 +127,9 @@ Do not flatten everything to `/v1/...`.
 - Token listed on a `people.json` user selects that user; otherwise the first fixture user.
 - Startup and `POST /reset` drop SQLite and reload fixtures. The DB file is a working copy, not durable account state.
 - People: honor required `personFields` / `readMask` / `updatePersonFields`; generate etags; `updateContact` must 400 on missing or mismatched etag; `people/me` is the authenticated profile; search is prefix-phrase match; empty search `query` is a warmup and returns no results.
+- Gmail: `userId` is `me` or the authenticated email (else 403); list returns `{id, threadId}` only; honor `format`, `q`, `labelIds`, `includeSpamTrash`; send uses base64url RFC822; system labels cannot be deleted.
 
-Out of scope unless asked: OAuth/OIDC, discovery docs, quotas, contact groups, directory, photos, sync tokens, batch mutate, multi-worker.
+Out of scope unless asked: OAuth/OIDC, discovery docs, quotas, contact groups, directory, photos, sync tokens, batch mutate, Gmail settings/CSE/watch/history/import, multi-worker.
 
 ## Adding an API
 

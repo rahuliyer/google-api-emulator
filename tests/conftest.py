@@ -13,10 +13,11 @@ AUTH = {"Authorization": "Bearer test-token"}
 
 @pytest.fixture
 def fixtures_dir(tmp_path: Path) -> Path:
-    src = Path(__file__).resolve().parents[1] / "fixtures" / "people.json"
+    src = Path(__file__).resolve().parents[1] / "fixtures"
     dest = tmp_path / "fixtures"
     dest.mkdir()
-    dest.joinpath("people.json").write_text(src.read_text())
+    for path in src.glob("*.json"):
+        dest.joinpath(path.name).write_text(path.read_text())
     return dest
 
 

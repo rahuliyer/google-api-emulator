@@ -37,5 +37,9 @@ def failed_precondition(message: str) -> GoogleAPIError:
     return GoogleAPIError(400, "FAILED_PRECONDITION", message)
 
 
+def permission_denied(message: str) -> GoogleAPIError:
+    return GoogleAPIError(403, "PERMISSION_DENIED", message)
+
+
 async def google_api_error_handler(_request: Request, exc: GoogleAPIError) -> JSONResponse:
     return JSONResponse(status_code=exc.code, content=exc.body())

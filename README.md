@@ -1,8 +1,8 @@
 # Google API Emulator
 
-Local stand-in for Google APIs so you can test an agent without hitting production. Point the agent’s **People API base URL** at this process; request paths, JSON, field masks, etags, and errors stay Google-shaped.
+Local stand-in for Google APIs so you can test an agent without hitting production. Swap the Google host for this process; request paths, JSON, field masks, etags, and errors stay Google-shaped.
 
-People API is implemented first. Gmail and Calendar can mount the same way later.
+People and Gmail are implemented. Calendar can mount the same way later.
 
 ## Run
 
@@ -17,6 +17,32 @@ uv run google-api-emulator --port 8080 --fixtures-dir fixtures --db-path emulato
 Startup (and `POST /reset`) wipe the SQLite file and reload fixtures. The database is a working copy you can inspect with the `sqlite3` CLI, not a long-lived account.
 
 Run a single worker. `/health` and `POST /reset` do not require a token.
+
+## Point an agent at Gmail
+
+Replace `https://gmail.googleapis.com` with:
+
+```text
+http://127.0.0.1:8080/services/gmail
+```
+
+```python
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+
+gmail = build(
+    "gmail",
+    "v1",
+    credentials=Credentials(token="any-token"),
+    client_options={"api_endpoint": "http://127.0.0.1:8080/services/gmail"},
+)
+gmail.users().messages().list(userId="me").execute()
+```
+
+```http
+GET /services/gmail/gmail/v1/users/me/messages
+Authorization: Bearer any-token
+```
 
 ## Point an agent at People
 
@@ -74,9 +100,18 @@ If the token appears on a user in `fixtures/people.json`, that user’s contacts
 
 ## Fixtures
 
-One JSON file per API. People seed: [`fixtures/people.json`](fixtures/people.json).
+One JSON file per API: [`fixtures/people.json`](fixtures/people.json), [`fixtures/gmail.json`](fixtures/gmail.json). Gmail mailboxes are keyed by email and must match a People user.
 
 `POST /reset` reloads every fixture file in the directory (including `allowed_tokens.json` if you add it).
+
+Gmail messages and drafts can include `attachments`. Use `text` for UTF-8, or `data` for base64 / base64url bytes:
+
+```json
+"attachments": [
+  { "filename": "note.txt", "mimeType": "text/plain", "text": "hello" },
+  { "filename": "photo.png", "mimeType": "image/png", "data": "iVBORw0KGgo..." }
+]
+```
 
 ## People API coverage
 
@@ -94,6 +129,25 @@ One JSON file per API. People seed: [`fixtures/people.json`](fixtures/people.jso
 | GET | `/services/people/v1/otherContacts:search` |
 
 Not in this slice: contact groups, directory people, photos, sync tokens, batch mutate, OAuth.
+
+## Gmail API coverage
+
+| Method | Path |
+| --- | --- |
+| GET | `/services/gmail/gmail/v1/users/{userId}/profile` |
+| GET | `/services/gmail/gmail/v1/users/{userId}/messages` |
+| GET | `/services/gmail/gmail/v1/users/{userId}/messages/{id}` |
+| POST | `/services/gmail/gmail/v1/users/{userId}/messages/send` |
+| POST | `/services/gmail/gmail/v1/users/{userId}/messages/{id}/modify` |
+| POST | `/services/gmail/gmail/v1/users/{userId}/messages/{id}/trash` |
+| POST | `/services/gmail/gmail/v1/users/{userId}/messages/{id}/untrash` |
+| DELETE | `/services/gmail/gmail/v1/users/{userId}/messages/{id}` |
+| GET | `/services/gmail/gmail/v1/users/{userId}/messages/{id}/attachments/{id}` |
+| GET/POST/DELETE | `/services/gmail/gmail/v1/users/{userId}/threads...` |
+| GET/POST/PATCH/PUT/DELETE | `/services/gmail/gmail/v1/users/{userId}/labels...` |
+| GET/POST/PUT/DELETE | `/services/gmail/gmail/v1/users/{userId}/drafts...` |
+
+`userId` is `me` or the authenticated user’s email. Not in this slice: settings, CSE, watch, history, import/insert, media upload URIs.
 
 ## Tests
 

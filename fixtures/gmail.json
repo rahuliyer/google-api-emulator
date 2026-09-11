@@ -1,0 +1,55 @@
+{
+  "users": [
+    {
+      "email": "alice@example.com",
+      "labels": [{ "id": "Label_ops", "name": "Ops" }],
+      "messages": [
+        {
+          "id": "m1",
+          "threadId": "t1",
+          "labelIds": ["INBOX", "UNREAD"],
+          "from": "bob@example.com",
+          "to": ["alice@example.com"],
+          "subject": "Hello",
+          "body": "Hi Alice, this is Bob.",
+          "date": "2026-01-10T09:00:00Z"
+        },
+        {
+          "id": "m2",
+          "threadId": "t2",
+          "labelIds": ["INBOX"],
+          "from": "carol@example.com",
+          "to": ["alice@example.com"],
+          "subject": "Lunch",
+          "body": "Want to get lunch?",
+          "date": "2026-01-11T12:00:00Z"
+        },
+        {
+          "id": "m3",
+          "threadId": "t3",
+          "labelIds": ["INBOX"],
+          "from": "bob@example.com",
+          "to": ["alice@example.com"],
+          "subject": "Notes",
+          "body": "See attached.",
+          "date": "2026-01-12T15:00:00Z",
+          "attachments": [
+            {
+              "filename": "note.txt",
+              "mimeType": "text/plain",
+              "text": "hello from fixture"
+            }
+          ]
+        }
+      ],
+      "drafts": [
+        {
+          "id": "r-draft1",
+          "to": ["bob@example.com"],
+          "subject": "Re: Hello",
+          "body": "Thanks Bob."
+        }
+      ]
+    }
+  ]
+}

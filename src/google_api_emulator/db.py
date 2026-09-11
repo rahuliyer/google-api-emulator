@@ -28,6 +28,38 @@ CREATE TABLE people (
     person_json TEXT NOT NULL,
     deleted INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE gmail_mailboxes (
+    user_id TEXT PRIMARY KEY REFERENCES users(id),
+    history_id INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE gmail_labels (
+    id TEXT NOT NULL,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    type TEXT NOT NULL,
+    label_json TEXT NOT NULL,
+    PRIMARY KEY (user_id, id)
+);
+
+CREATE TABLE gmail_messages (
+    id TEXT NOT NULL,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    thread_id TEXT NOT NULL,
+    label_ids TEXT NOT NULL,
+    internal_date INTEGER NOT NULL,
+    history_id INTEGER NOT NULL,
+    raw TEXT NOT NULL,
+    message_json TEXT NOT NULL,
+    PRIMARY KEY (user_id, id)
+);
+
+CREATE TABLE gmail_drafts (
+    id TEXT NOT NULL,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    message_id TEXT NOT NULL,
+    PRIMARY KEY (user_id, id)
+);
 """
 
 
@@ -48,6 +80,10 @@ class Database:
             self.conn.executescript(
                 """
                 PRAGMA foreign_keys = OFF;
+                DROP TABLE IF EXISTS gmail_drafts;
+                DROP TABLE IF EXISTS gmail_messages;
+                DROP TABLE IF EXISTS gmail_labels;
+                DROP TABLE IF EXISTS gmail_mailboxes;
                 DROP TABLE IF EXISTS people;
                 DROP TABLE IF EXISTS tokens;
                 DROP TABLE IF EXISTS users;
