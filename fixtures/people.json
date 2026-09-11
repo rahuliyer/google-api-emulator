@@ -1,0 +1,33 @@
+{
+  "users": [
+    {
+      "id": "alice",
+      "email": "alice@example.com",
+      "tokens": ["alice-token"],
+      "profile": {
+        "names": [{ "displayName": "Alice", "givenName": "Alice" }]
+      },
+      "contacts": [
+        {
+          "resourceName": "people/c1",
+          "names": [
+            {
+              "givenName": "Bob",
+              "familyName": "Jones",
+              "displayName": "Bob Jones"
+            }
+          ],
+          "emailAddresses": [{ "value": "bob@example.com" }],
+          "phoneNumbers": [{ "value": "+1-555-0100" }]
+        }
+      ],
+      "otherContacts": [
+        {
+          "resourceName": "otherContacts/o1",
+          "names": [{ "displayName": "Carol" }],
+          "emailAddresses": [{ "value": "carol@example.com" }]
+        }
+      ]
+    }
+  ]
+}
