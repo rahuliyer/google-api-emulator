@@ -60,6 +60,28 @@ CREATE TABLE gmail_drafts (
     message_id TEXT NOT NULL,
     PRIMARY KEY (user_id, id)
 );
+
+CREATE TABLE calendar_calendars (
+    user_id TEXT NOT NULL REFERENCES users(id),
+    calendar_id TEXT NOT NULL,
+    etag TEXT NOT NULL,
+    primary_cal INTEGER NOT NULL DEFAULT 0,
+    calendar_json TEXT NOT NULL,
+    list_json TEXT NOT NULL,
+    PRIMARY KEY (user_id, calendar_id)
+);
+
+CREATE TABLE calendar_events (
+    user_id TEXT NOT NULL REFERENCES users(id),
+    calendar_id TEXT NOT NULL,
+    event_id TEXT NOT NULL,
+    etag TEXT NOT NULL,
+    status TEXT NOT NULL,
+    start_ms INTEGER NOT NULL,
+    end_ms INTEGER NOT NULL,
+    event_json TEXT NOT NULL,
+    PRIMARY KEY (user_id, calendar_id, event_id)
+);
 """
 
 
@@ -80,6 +102,8 @@ class Database:
             self.conn.executescript(
                 """
                 PRAGMA foreign_keys = OFF;
+                DROP TABLE IF EXISTS calendar_events;
+                DROP TABLE IF EXISTS calendar_calendars;
                 DROP TABLE IF EXISTS gmail_drafts;
                 DROP TABLE IF EXISTS gmail_messages;
                 DROP TABLE IF EXISTS gmail_labels;

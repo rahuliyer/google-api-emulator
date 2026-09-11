@@ -2,7 +2,7 @@
 
 Local stand-in for Google APIs so you can test an agent without hitting production. Swap the Google host for this process; request paths, JSON, field masks, etags, and errors stay Google-shaped.
 
-People and Gmail are implemented. Calendar can mount the same way later.
+People, Gmail, and Calendar are implemented.
 
 ## Run
 
@@ -44,6 +44,32 @@ GET /services/gmail/gmail/v1/users/me/messages
 Authorization: Bearer any-token
 ```
 
+## Point an agent at Calendar
+
+Replace `https://www.googleapis.com` with:
+
+```text
+http://127.0.0.1:8080/services/calendar
+```
+
+```python
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+
+calendar = build(
+    "calendar",
+    "v3",
+    credentials=Credentials(token="any-token"),
+    client_options={"api_endpoint": "http://127.0.0.1:8080/services/calendar"},
+)
+calendar.events().list(calendarId="primary").execute()
+```
+
+```http
+GET /services/calendar/calendar/v3/calendars/primary/events
+Authorization: Bearer any-token
+```
+
 ## Point an agent at People
 
 Replace `https://people.googleapis.com` with:
@@ -81,7 +107,7 @@ Later APIs keep Google’s published path after `/services/{name}`:
 | Gmail | `http://127.0.0.1:8080/services/gmail` | `/services/gmail/gmail/v1/users/me/messages` |
 | Calendar | `http://127.0.0.1:8080/services/calendar` | `/services/calendar/calendar/v3/calendars/primary/events` |
 
-Calendar client libraries that replace `rootUrl + servicePath` should set `api_endpoint` to `http://127.0.0.1:8080/services/calendar/calendar/v3`.
+Calendar client libraries that replace `rootUrl + servicePath` (`google-api-python-client`) should set `api_endpoint` to `http://127.0.0.1:8080/services/calendar`. Host-swap HTTP still uses `/services/calendar/calendar/v3/...`.
 
 ## Auth
 
@@ -100,7 +126,7 @@ If the token appears on a user in `fixtures/people.json`, that user’s contacts
 
 ## Fixtures
 
-One JSON file per API: [`fixtures/people.json`](fixtures/people.json), [`fixtures/gmail.json`](fixtures/gmail.json). Gmail mailboxes are keyed by email and must match a People user.
+One JSON file per API: [`fixtures/people.json`](fixtures/people.json), [`fixtures/gmail.json`](fixtures/gmail.json), [`fixtures/calendar.json`](fixtures/calendar.json). Gmail mailboxes and Calendar accounts are keyed by email and must match a People user.
 
 `POST /reset` reloads every fixture file in the directory (including `allowed_tokens.json` if you add it).
 
@@ -111,6 +137,17 @@ Gmail messages and drafts can include `attachments`. Use `text` for UTF-8, or `d
   { "filename": "note.txt", "mimeType": "text/plain", "text": "hello" },
   { "filename": "photo.png", "mimeType": "image/png", "data": "iVBORw0KGgo..." }
 ]
+```
+
+Calendar events use Google’s `start`/`end` objects (`dateTime` or all-day `date`):
+
+```json
+{
+  "id": "evt1",
+  "summary": "Lunch with Bob",
+  "start": { "dateTime": "2026-01-15T12:00:00-08:00" },
+  "end": { "dateTime": "2026-01-15T13:00:00-08:00" }
+}
 ```
 
 ## People API coverage
@@ -148,6 +185,26 @@ Not in this slice: contact groups, directory people, photos, sync tokens, batch 
 | GET/POST/PUT/DELETE | `/services/gmail/gmail/v1/users/{userId}/drafts...` |
 
 `userId` is `me` or the authenticated user’s email. Not in this slice: settings, CSE, watch, history, import/insert, media upload URIs.
+
+## Calendar API coverage
+
+| Method | Path |
+| --- | --- |
+| GET | `/services/calendar/calendar/v3/users/me/calendarList` |
+| GET | `/services/calendar/calendar/v3/users/me/calendarList/{calendarId}` |
+| GET | `/services/calendar/calendar/v3/calendars/{calendarId}` |
+| POST | `/services/calendar/calendar/v3/calendars` |
+| PATCH/PUT | `/services/calendar/calendar/v3/calendars/{calendarId}` |
+| DELETE | `/services/calendar/calendar/v3/calendars/{calendarId}` |
+| POST | `/services/calendar/calendar/v3/calendars/{calendarId}/clear` |
+| GET | `/services/calendar/calendar/v3/calendars/{calendarId}/events` |
+| POST | `/services/calendar/calendar/v3/calendars/{calendarId}/events` |
+| GET | `/services/calendar/calendar/v3/calendars/{calendarId}/events/{eventId}` |
+| PATCH/PUT | `/services/calendar/calendar/v3/calendars/{calendarId}/events/{eventId}` |
+| DELETE | `/services/calendar/calendar/v3/calendars/{calendarId}/events/{eventId}` |
+| POST | `/services/calendar/calendar/v3/freeBusy` |
+
+`calendarId` is `primary` or the calendar id (the primary id is the user’s email). Not in this slice: ACL, watch, settings, colors, recurring instance expansion, import/move/quickAdd.
 
 ## Tests
 

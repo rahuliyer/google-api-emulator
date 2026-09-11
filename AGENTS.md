@@ -6,7 +6,7 @@ Guidance for coding agents working in this repository.
 
 A local Google API emulator for testing agents. Swap the Google host for this process; keep official REST paths, camelCase JSON, field masks, etags, and Google error envelopes.
 
-People and Gmail are implemented. Calendar is planned, not implemented.
+People, Gmail, and Calendar are implemented.
 
 ## Commands
 
@@ -20,7 +20,7 @@ Python ≥ 3.12. Package manager is **uv**. Do not add Poetry/pipenv.
 
 ## Verification
 
-`uv run pytest` is not enough after People or Gmail route changes. Start uvicorn and drive it with `google-api-python-client`. `TestClient` never hits official-client URL encoding (`alt=json`, Bearer from `Credentials`) the same way.
+`uv run pytest` is not enough after People, Gmail, or Calendar route changes. Start uvicorn and drive it with `google-api-python-client`. `TestClient` never hits official-client URL encoding (`alt=json`, Bearer from `Credentials`) the same way.
 
 ### 1. Fixture in `/tmp`
 
@@ -33,6 +33,8 @@ mkdir -p /tmp/google_api_emulator_fixtures
 `/tmp/google_api_emulator_fixtures/people.json` should include at least: one user with `tokens`, a `profile`, two contacts with names/emails, and one `otherContacts` entry.
 
 `/tmp/google_api_emulator_fixtures/gmail.json` should include that user’s email, at least two messages (one `UNREAD`), a draft, and `attachments` on a message (`filename`, `mimeType`, plus `text` or base64 `data`). Mailboxes are keyed by email matching a People user.
+
+`/tmp/google_api_emulator_fixtures/calendar.json` should include that user’s email, a primary calendar (`id` `primary` or omitted), `timeZone`, and at least two events (one timed `dateTime`, one all-day `date`).
 
 ### 2. Start the emulator
 
@@ -69,9 +71,15 @@ gmail = build(
     credentials=Credentials(token="verify-token"),
     client_options={"api_endpoint": "http://127.0.0.1:18080/services/gmail"},
 )
+calendar = build(
+    "calendar",
+    "v3",
+    credentials=Credentials(token="verify-token"),
+    client_options={"api_endpoint": "http://127.0.0.1:18080/services/calendar"},
+)
 ```
 
-`api_endpoint` with or without a trailing slash both work. Do not use `AnonymousCredentials` — the emulator requires `Authorization: Bearer`.
+`api_endpoint` with or without a trailing slash both work. Do not use `AnonymousCredentials` — the emulator requires `Authorization: Bearer`. Calendar’s official client replaces `baseUrl` (already `/calendar/v3`), so `api_endpoint` is `/services/calendar`; host-swap HTTP still uses `/services/calendar/calendar/v3/...`.
 
 ### 4. Checks that must pass
 
@@ -98,6 +106,16 @@ Gmail:
 - `drafts.create` then `drafts.send`
 - Request without `Authorization` to `/services/gmail/gmail/v1/users/me/profile` is 401 `UNAUTHENTICATED`
 
+Calendar:
+
+- `calendar.calendarList().list()` includes the primary calendar (`id` is the user email, `primary` is true)
+- `calendar.calendars().get(calendarId="primary")` is the fixture calendar
+- `calendar.events().list(calendarId="primary")` returns fixture event ids; `events.get` returns summary/start
+- `events.list(calendarId="primary", q=...)` hits a fixture summary; `timeMin`/`timeMax` exclude events outside the window
+- `events.insert` → `events.patch` with returned etag → stale `If-Match` is `HttpError` 412 → `events.delete` → list hides it unless `showDeleted=True`
+- `calendar.freebusy().query` with `timeMin`/`timeMax` and `items=[{"id":"primary"}]` returns busy times
+- Request without `Authorization` to `/services/calendar/calendar/v3/calendars/primary/events` is 401 `UNAUTHENTICATED`
+
 Stop the server when done. Do not leave uvicorn on 18080.
 
 ## Layout
@@ -105,7 +123,8 @@ Stop the server when done. Do not leave uvicorn on 18080.
 - `src/google_api_emulator/` — app, auth, SQLite, fixture loader, admin (`/health`, `POST /reset`)
 - `src/google_api_emulator/services/people/` — People routes, store, field masks, search
 - `src/google_api_emulator/services/gmail/` — Gmail routes, MIME, mailbox store
-- `fixtures/people.json`, `fixtures/gmail.json` — per-API seeds
+- `src/google_api_emulator/services/calendar/` — Calendar routes, calendars, events, freeBusy
+- `fixtures/people.json`, `fixtures/gmail.json`, `fixtures/calendar.json` — per-API seeds
 - `tests/` — pytest + httpx `TestClient`
 
 New Google APIs go in `services/{name}/` and mount at `/services/{name}` with Google’s published path after that prefix:
@@ -128,8 +147,9 @@ Do not flatten everything to `/v1/...`.
 - Startup and `POST /reset` drop SQLite and reload fixtures. The DB file is a working copy, not durable account state.
 - People: honor required `personFields` / `readMask` / `updatePersonFields`; generate etags; `updateContact` must 400 on missing or mismatched etag; `people/me` is the authenticated profile; search is prefix-phrase match; empty search `query` is a warmup and returns no results.
 - Gmail: `userId` is `me` or the authenticated email (else 403); list returns `{id, threadId}` only; honor `format`, `q`, `labelIds`, `includeSpamTrash`; send uses base64url RFC822; system labels cannot be deleted.
+- Calendar: `calendarId` is `primary` or the calendar id (primary id is the user email); honor `timeMin`/`timeMax`/`q`; insert requires `start` and `end`; delete sets `status=cancelled`; `If-Match` (or body `etag`) mismatch is 412.
 
-Out of scope unless asked: OAuth/OIDC, discovery docs, quotas, contact groups, directory, photos, sync tokens, batch mutate, Gmail settings/CSE/watch/history/import, multi-worker.
+Out of scope unless asked: OAuth/OIDC, discovery docs, quotas, contact groups, directory, photos, sync tokens, batch mutate, Gmail settings/CSE/watch/history/import, Calendar ACL/watch/settings/recurring expansion, multi-worker.
 
 ## Adding an API
 

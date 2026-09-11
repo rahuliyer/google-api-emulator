@@ -93,6 +93,55 @@ class GmailFixtureFile(BaseModel):
     users: list[GmailUserFixture] = Field(default_factory=list)
 
 
+class CalendarEventFixture(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: str | None = None
+    summary: str = ""
+    description: str | None = None
+    location: str | None = None
+    start: dict[str, Any]
+    end: dict[str, Any]
+    attendees: list[dict[str, Any]] = Field(default_factory=list)
+    status: str | None = None
+    transparency: str | None = None
+
+    def as_body(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "summary": self.summary,
+            "description": self.description,
+            "location": self.location,
+            "start": self.start,
+            "end": self.end,
+            "attendees": self.attendees,
+            "status": self.status,
+            "transparency": self.transparency,
+        }
+
+
+class CalendarCalendarFixture(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: str | None = None
+    summary: str = "Primary"
+    timeZone: str = "America/Los_Angeles"
+    description: str | None = None
+    location: str | None = None
+    events: list[CalendarEventFixture] = Field(default_factory=list)
+
+
+class CalendarUserFixture(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    email: str
+    calendars: list[CalendarCalendarFixture] = Field(default_factory=list)
+
+
+class CalendarFixtureFile(BaseModel):
+    users: list[CalendarUserFixture] = Field(default_factory=list)
+
+
 def load_allowed_tokens(fixtures_dir: Path) -> set[str] | None:
     path = fixtures_dir / "allowed_tokens.json"
     if not path.is_file():
@@ -213,6 +262,53 @@ def seed_gmail(db: Database, fixture: GmailFixtureFile | None) -> None:
                 "INSERT INTO gmail_drafts (id, user_id, message_id) VALUES (?, ?, ?)",
                 (draft_id, user_id, resource["id"]),
             )
+
+
+def load_calendar_fixture(fixtures_dir: Path) -> CalendarFixtureFile | None:
+    path = fixtures_dir / "calendar.json"
+    if not path.is_file():
+        return None
+    return CalendarFixtureFile.model_validate_json(path.read_text())
+
+
+def seed_calendar(db: Database, fixture: CalendarFixtureFile | None) -> None:
+    from google_api_emulator.auth import User
+    from google_api_emulator.services.calendar.store import CalendarStore
+
+    store = CalendarStore(db)
+    users = db.fetchall("SELECT id, email FROM users")
+    by_email = {row["email"].lower(): row for row in users}
+    for user in users:
+        store.ensure_primary(user["id"], user["email"])
+    if fixture is None:
+        return
+    for mailbox in fixture.users:
+        row = by_email.get(mailbox.email.lower())
+        if row is None:
+            continue
+        owner = User(id=row["id"], email=row["email"], profile_resource_name="", token="")
+        for calendar in mailbox.calendars:
+            requested_id = calendar.id or "primary"
+            resolved = store.resolve_calendar_id(owner, requested_id)
+            existing = db.fetchone(
+                "SELECT calendar_id FROM calendar_calendars WHERE user_id = ? AND calendar_id = ?",
+                (owner.id, resolved),
+            )
+            fields = {
+                "summary": calendar.summary,
+                "timeZone": calendar.timeZone,
+                "description": calendar.description,
+                "location": calendar.location,
+            }
+            if existing is None:
+                body = dict(fields)
+                if requested_id not in {"primary", owner.email}:
+                    body["id"] = requested_id
+                store.create_calendar(owner, body)
+            else:
+                store.patch_calendar(owner, resolved, fields, None)
+            for event in calendar.events:
+                store.insert_event(owner, resolved, event.as_body())
 
 
 def resource_id(resource: dict) -> str:
