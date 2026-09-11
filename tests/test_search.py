@@ -47,6 +47,16 @@ def test_search_contacts_prefix(client: TestClient):
     assert miss.json()["results"] == []
 
 
+def test_search_requires_query(client: TestClient):
+    response = client.get(
+        f"{PEOPLE}/people:searchContacts",
+        params={"readMask": "names"},
+        headers=AUTH,
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["status"] == "INVALID_ARGUMENT"
+
+
 def test_search_requires_read_mask(client: TestClient):
     response = client.get(
         f"{PEOPLE}/people:searchContacts",

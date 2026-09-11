@@ -165,6 +165,17 @@ def test_create_update_delete_contact(client: TestClient):
     assert missing.status_code == 404
 
 
+def test_update_requires_etag(client: TestClient):
+    response = client.patch(
+        f"{PEOPLE}/people/c1:updateContact",
+        params={"updatePersonFields": "emailAddresses"},
+        json={"emailAddresses": [{"value": "no-etag@example.com"}]},
+        headers=AUTH,
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["status"] == "INVALID_ARGUMENT"
+
+
 def test_reset_restores_fixture_contacts(client: TestClient):
     client.delete(f"{PEOPLE}/people/c1:deleteContact", headers=AUTH)
     assert (
