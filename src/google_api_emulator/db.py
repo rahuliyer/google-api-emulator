@@ -88,7 +88,7 @@ CREATE TABLE maps_places (
     place_json TEXT NOT NULL
 );
 
-CREATE TABLE maps_routes (
+CREATE TABLE routes_responses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     origin_json TEXT NOT NULL,
     destination_json TEXT NOT NULL,
@@ -97,7 +97,7 @@ CREATE TABLE maps_routes (
     response_json TEXT NOT NULL
 );
 
-CREATE TABLE maps_matrices (
+CREATE TABLE routes_matrices (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     origins_json TEXT NOT NULL,
     destinations_json TEXT NOT NULL,
@@ -124,8 +124,8 @@ class Database:
             self.conn.executescript(
                 """
                 PRAGMA foreign_keys = OFF;
-                DROP TABLE IF EXISTS maps_matrices;
-                DROP TABLE IF EXISTS maps_routes;
+                DROP TABLE IF EXISTS routes_matrices;
+                DROP TABLE IF EXISTS routes_responses;
                 DROP TABLE IF EXISTS maps_places;
                 DROP TABLE IF EXISTS calendar_events;
                 DROP TABLE IF EXISTS calendar_calendars;

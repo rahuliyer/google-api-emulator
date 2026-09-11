@@ -6,9 +6,9 @@ from typing import Any
 
 from google_api_emulator.db import Database
 from google_api_emulator.errors import invalid_argument
-from google_api_emulator.services.maps.fieldmask import apply_field_mask, mask_includes
-from google_api_emulator.services.maps.polyline import encode_polyline
-from google_api_emulator.services.maps.waypoints import (
+from google_api_emulator.services.routes.fieldmask import apply_field_mask, mask_includes
+from google_api_emulator.services.routes.polyline import encode_polyline
+from google_api_emulator.services.routes.waypoints import (
     DRIVE_MODES,
     TRAVEL_MODES,
     camelize_request,
@@ -73,7 +73,7 @@ def localized_text(text: str, language: str) -> dict[str, str]:
     return {"text": text, "languageCode": language}
 
 
-class MapsStore:
+class RoutesStore:
     def __init__(self, db: Database | None = None) -> None:
         self.db = db
 
@@ -89,7 +89,7 @@ class MapsStore:
         assert self.db is not None
         self.db.execute(
             """
-            INSERT INTO maps_routes
+            INSERT INTO routes_responses
                 (origin_json, destination_json, intermediates_json, travel_mode, response_json)
             VALUES (?, ?, ?, ?, ?)
             """,
@@ -113,7 +113,7 @@ class MapsStore:
         assert self.db is not None
         self.db.execute(
             """
-            INSERT INTO maps_matrices
+            INSERT INTO routes_matrices
                 (origins_json, destinations_json, travel_mode, elements_json)
             VALUES (?, ?, ?, ?)
             """,
@@ -279,7 +279,7 @@ class MapsStore:
         rows = self.db.fetchall(
             """
             SELECT origin_json, destination_json, intermediates_json, travel_mode, response_json
-            FROM maps_routes
+            FROM routes_responses
             """
         )
         for row in rows:
@@ -304,7 +304,7 @@ class MapsStore:
         rows = self.db.fetchall(
             """
             SELECT origins_json, destinations_json, travel_mode, elements_json
-            FROM maps_matrices
+            FROM routes_matrices
             """
         )
         for row in rows:
@@ -529,7 +529,7 @@ def build_fixture_route(
         return copy.deepcopy(body["response"])
     if body.get("routes"):
         return {"routes": copy.deepcopy(body["routes"])}
-    store = MapsStore()
+    store = RoutesStore()
     language = body.get("languageCode") or "en-US"
     units = body.get("units") or "METRIC"
     response = store._synthesize_routes_response(

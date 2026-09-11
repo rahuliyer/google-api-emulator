@@ -142,7 +142,7 @@ class CalendarFixtureFile(BaseModel):
     users: list[CalendarUserFixture] = Field(default_factory=list)
 
 
-class MapsWaypointFixture(BaseModel):
+class RoutesWaypointFixture(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     address: str | None = None
@@ -163,12 +163,12 @@ class MapsWaypointFixture(BaseModel):
         }
 
 
-class MapsRouteFixture(BaseModel):
+class RoutesRouteFixture(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    origin: MapsWaypointFixture
-    destination: MapsWaypointFixture
-    intermediates: list[MapsWaypointFixture] = Field(default_factory=list)
+    origin: RoutesWaypointFixture
+    destination: RoutesWaypointFixture
+    intermediates: list[RoutesWaypointFixture] = Field(default_factory=list)
     travelMode: str = "DRIVE"
     distanceMeters: int | None = None
     duration: str | None = None
@@ -198,7 +198,7 @@ class MapsRouteFixture(BaseModel):
         }
 
 
-class MapsMatrixElementFixture(BaseModel):
+class RoutesMatrixElementFixture(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     originIndex: int
@@ -221,18 +221,18 @@ class MapsMatrixElementFixture(BaseModel):
         }
 
 
-class MapsMatrixFixture(BaseModel):
+class RoutesMatrixFixture(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    origins: list[MapsWaypointFixture]
-    destinations: list[MapsWaypointFixture]
+    origins: list[RoutesWaypointFixture]
+    destinations: list[RoutesWaypointFixture]
     travelMode: str = "DRIVE"
-    elements: list[MapsMatrixElementFixture] = Field(default_factory=list)
+    elements: list[RoutesMatrixElementFixture] = Field(default_factory=list)
 
 
-class MapsFixtureFile(BaseModel):
-    routes: list[MapsRouteFixture] = Field(default_factory=list)
-    matrices: list[MapsMatrixFixture] = Field(default_factory=list)
+class RoutesFixtureFile(BaseModel):
+    routes: list[RoutesRouteFixture] = Field(default_factory=list)
+    matrices: list[RoutesMatrixFixture] = Field(default_factory=list)
 
 
 def load_allowed_tokens(fixtures_dir: Path) -> set[str] | None:
@@ -404,20 +404,20 @@ def seed_calendar(db: Database, fixture: CalendarFixtureFile | None) -> None:
                 store.insert_event(owner, resolved, event.as_body())
 
 
-def load_maps_fixture(fixtures_dir: Path) -> MapsFixtureFile | None:
-    path = fixtures_dir / "maps.json"
+def load_routes_fixture(fixtures_dir: Path) -> RoutesFixtureFile | None:
+    path = fixtures_dir / "routes.json"
     if not path.is_file():
         return None
-    return MapsFixtureFile.model_validate_json(path.read_text())
+    return RoutesFixtureFile.model_validate_json(path.read_text())
 
 
-def seed_maps(db: Database, fixture: MapsFixtureFile | None) -> None:
-    from google_api_emulator.services.maps.store import MapsStore, build_fixture_route
-    from google_api_emulator.services.maps.waypoints import normalize_travel_mode
+def seed_routes(db: Database, fixture: RoutesFixtureFile | None) -> None:
+    from google_api_emulator.services.routes.store import RoutesStore, build_fixture_route
+    from google_api_emulator.services.routes.waypoints import normalize_travel_mode
 
     if fixture is None:
         return
-    store = MapsStore(db)
+    store = RoutesStore(db)
     for route in fixture.routes:
         origin = route.origin.as_waypoint()
         destination = route.destination.as_waypoint()

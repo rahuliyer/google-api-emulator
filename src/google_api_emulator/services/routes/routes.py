@@ -4,17 +4,17 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Header, Query, Request
 
-from google_api_emulator.auth import require_maps_user
-from google_api_emulator.services.maps.fieldmask import parse_field_mask
-from google_api_emulator.services.maps.store import MapsStore
+from google_api_emulator.auth import require_routes_user
+from google_api_emulator.services.routes.fieldmask import parse_field_mask
+from google_api_emulator.services.routes.store import RoutesStore
 
 
-def _store(request: Request) -> MapsStore:
-    return MapsStore(request.app.state.emulator.db)
+def _store(request: Request) -> RoutesStore:
+    return RoutesStore(request.app.state.emulator.db)
 
 
-def _maps_router(prefix: str) -> APIRouter:
-    router = APIRouter(prefix=prefix, dependencies=[Depends(require_maps_user)])
+def _routes_router(prefix: str) -> APIRouter:
+    router = APIRouter(prefix=prefix, dependencies=[Depends(require_routes_user)])
 
     @router.post("/directions/v2:computeRoutes")
     def compute_routes(
@@ -41,5 +41,5 @@ def _maps_router(prefix: str) -> APIRouter:
     return router
 
 
-# Host swap: routes.googleapis.com → /services/maps, then Google’s /directions/v2:...
-router = _maps_router("/services/maps")
+# Host swap: routes.googleapis.com → /services/routes, then Google’s /directions/v2:...
+router = _routes_router("/services/routes")

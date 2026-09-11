@@ -11,12 +11,12 @@ MATRIX_MASK = {
     **AUTH,
     "X-Goog-FieldMask": "originIndex,destinationIndex,status,condition,distanceMeters,duration,staticDuration",
 }
-MAPS = "/services/maps"
+ROUTES = "/services/routes"
 
 
 def test_compute_routes_fixture_by_address(client: TestClient):
     response = client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         json={
             "origin": {"address": "San Francisco, CA"},
             "destination": {"address": "Los Angeles, CA"},
@@ -35,7 +35,7 @@ def test_compute_routes_fixture_by_address(client: TestClient):
 
 def test_compute_routes_field_mask_and_alternates(client: TestClient):
     primary = client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         json={
             "origin": {"address": "san francisco, ca"},
             "destination": {"address": "Los Angeles, CA"},
@@ -45,7 +45,7 @@ def test_compute_routes_field_mask_and_alternates(client: TestClient):
     assert len(primary.json()["routes"]) == 1
 
     alts = client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         json={
             "origin": {"address": "San Francisco, CA"},
             "destination": {"address": "Los Angeles, CA"},
@@ -61,7 +61,7 @@ def test_compute_routes_field_mask_and_alternates(client: TestClient):
 
 def test_compute_routes_place_id_and_latlng(client: TestClient):
     by_place = client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         json={
             "origin": {"placeId": "ChIJIQBpAG2ahYAR_6128GcTUEo"},
             "destination": {"placeId": "ChIJ9T_5iuTKj4ARe3GfygqMnbk"},
@@ -71,7 +71,7 @@ def test_compute_routes_place_id_and_latlng(client: TestClient):
     assert by_place.json()["routes"][0]["distanceMeters"] == 76320
 
     by_latlng = client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         json={
             "origin": {"location": {"latLng": {"latitude": 37.7749, "longitude": -122.4194}}},
             "destination": {"location": {"latLng": {"latitude": 37.3382, "longitude": -121.8863}}},
@@ -83,7 +83,7 @@ def test_compute_routes_place_id_and_latlng(client: TestClient):
 
 def test_compute_routes_synthetic_latlng(client: TestClient):
     response = client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         json={
             "origin": {"location": {"latLng": {"latitude": 37.419734, "longitude": -122.0827784}}},
             "destination": {"location": {"latLng": {"latitude": 37.417670, "longitude": -122.079595}}},
@@ -100,7 +100,7 @@ def test_compute_routes_synthetic_latlng(client: TestClient):
 
 def test_unknown_address_is_empty_routes(client: TestClient):
     response = client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         json={
             "origin": {"address": "Unknown Origin"},
             "destination": {"address": "Unknown Destination"},
@@ -113,7 +113,7 @@ def test_unknown_address_is_empty_routes(client: TestClient):
 
 def test_traffic_unaware_uses_static_duration(client: TestClient):
     response = client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         json={
             "origin": {"address": "San Francisco, CA"},
             "destination": {"address": "Los Angeles, CA"},
@@ -128,7 +128,7 @@ def test_traffic_unaware_uses_static_duration(client: TestClient):
 
 def test_compute_routes_validation(client: TestClient):
     missing_mask = client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         json={"origin": {"address": "A"}, "destination": {"address": "B"}},
         headers=AUTH,
     )
@@ -136,14 +136,14 @@ def test_compute_routes_validation(client: TestClient):
     assert missing_mask.json()["error"]["status"] == "INVALID_ARGUMENT"
 
     missing_origin = client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         json={"destination": {"address": "Los Angeles, CA"}},
         headers=FIELD_MASK,
     )
     assert missing_origin.status_code == 400
 
     via = client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         json={
             "origin": {"address": "San Francisco, CA", "via": True},
             "destination": {"address": "Los Angeles, CA"},
@@ -153,7 +153,7 @@ def test_compute_routes_validation(client: TestClient):
     assert via.status_code == 400
 
     walk_pref = client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         json={
             "origin": {"location": {"latLng": {"latitude": 1.0, "longitude": 2.0}}},
             "destination": {"location": {"latLng": {"latitude": 1.1, "longitude": 2.1}}},
@@ -167,7 +167,7 @@ def test_compute_routes_validation(client: TestClient):
 
 def test_fields_query_param(client: TestClient):
     response = client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         params={"fields": "routes.distanceMeters"},
         json={
             "origin": {"address": "San Francisco, CA"},
@@ -182,7 +182,7 @@ def test_fields_query_param(client: TestClient):
 
 def test_compute_route_matrix(client: TestClient):
     response = client.post(
-        f"{MAPS}/distanceMatrix/v2:computeRouteMatrix",
+        f"{ROUTES}/distanceMatrix/v2:computeRouteMatrix",
         json={
             "origins": [{"waypoint": {"address": "San Francisco, CA"}}],
             "destinations": [
@@ -206,7 +206,7 @@ def test_compute_route_matrix(client: TestClient):
 
 def test_matrix_not_found_and_synthetic(client: TestClient):
     missing = client.post(
-        f"{MAPS}/distanceMatrix/v2:computeRouteMatrix",
+        f"{ROUTES}/distanceMatrix/v2:computeRouteMatrix",
         json={
             "origins": [{"waypoint": {"address": "Nowhere"}}],
             "destinations": [{"waypoint": {"address": "Also Nowhere"}}],
@@ -216,7 +216,7 @@ def test_matrix_not_found_and_synthetic(client: TestClient):
     assert missing.json()[0]["condition"] == "ROUTE_NOT_FOUND"
 
     synthetic = client.post(
-        f"{MAPS}/distanceMatrix/v2:computeRouteMatrix",
+        f"{ROUTES}/distanceMatrix/v2:computeRouteMatrix",
         json={
             "origins": [
                 {"waypoint": {"location": {"latLng": {"latitude": 37.42, "longitude": -122.08}}}}
@@ -233,7 +233,7 @@ def test_matrix_not_found_and_synthetic(client: TestClient):
 
 def test_integer_travel_mode_enum(client: TestClient):
     response = client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         json={
             "origin": {"address": "San Francisco, CA"},
             "destination": {"address": "Los Angeles, CA"},
@@ -245,9 +245,9 @@ def test_integer_travel_mode_enum(client: TestClient):
     assert response.json()["routes"][0]["distanceMeters"] == 615337
 
 
-def test_maps_requires_auth(client: TestClient):
+def test_routes_requires_auth(client: TestClient):
     response = client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         json={
             "origin": {"address": "San Francisco, CA"},
             "destination": {"address": "Los Angeles, CA"},
@@ -258,9 +258,9 @@ def test_maps_requires_auth(client: TestClient):
     assert response.json()["error"]["status"] == "UNAUTHENTICATED"
 
 
-def test_maps_accepts_api_key(client: TestClient):
+def test_routes_accepts_api_key(client: TestClient):
     response = client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         json={
             "origin": {"address": "San Francisco, CA"},
             "destination": {"address": "Los Angeles, CA"},
@@ -271,9 +271,9 @@ def test_maps_accepts_api_key(client: TestClient):
     assert response.json()["routes"][0]["distanceMeters"] == 615337
 
 
-def test_reset_reloads_maps_fixtures(client: TestClient):
+def test_reset_reloads_routes_fixtures(client: TestClient):
     client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         json={
             "origin": {"location": {"latLng": {"latitude": 10.0, "longitude": 10.0}}},
             "destination": {"location": {"latLng": {"latitude": 10.1, "longitude": 10.1}}},
@@ -282,7 +282,7 @@ def test_reset_reloads_maps_fixtures(client: TestClient):
     )
     client.post("/reset")
     listed = client.post(
-        f"{MAPS}/directions/v2:computeRoutes",
+        f"{ROUTES}/directions/v2:computeRoutes",
         json={
             "origin": {"address": "San Francisco, CA"},
             "destination": {"address": "Los Angeles, CA"},

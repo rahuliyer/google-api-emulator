@@ -30,7 +30,7 @@ def bearer_token(request: Request) -> str:
     return token
 
 
-def maps_token(request: Request) -> str:
+def routes_token(request: Request) -> str:
     header = request.headers.get("Authorization")
     if header and header.startswith("Bearer "):
         token = header.removeprefix("Bearer ").strip()
@@ -47,8 +47,8 @@ def require_user(request: Request) -> User:
     return user_from_token(request, bearer_token(request))
 
 
-def require_maps_user(request: Request) -> User:
-    return user_from_token(request, maps_token(request))
+def require_routes_user(request: Request) -> User:
+    return user_from_token(request, routes_token(request))
 
 
 def user_from_token(request: Request, token: str) -> User:
