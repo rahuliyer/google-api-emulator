@@ -8,6 +8,8 @@ from fastapi.testclient import TestClient
 from google_api_emulator.app import create_app
 from google_api_emulator.config import Settings
 
+AUTH = {"Authorization": "Bearer test-token"}
+
 
 @pytest.fixture
 def fixtures_dir(tmp_path: Path) -> Path:

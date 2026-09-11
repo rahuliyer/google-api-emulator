@@ -141,7 +141,7 @@ def validate_mask_fields(mask: str, *, required: bool, name: str) -> list[str]:
 def raise_missing_mask(name: str) -> None:
     from google_api_emulator.errors import invalid_argument
 
-    raise invalid_argument(f"personFields is required" if name == "personFields" else f"{name} is required")
+    raise invalid_argument(f"{name} is required")
 
 
 def validate_singletons(person: dict[str, Any]) -> None:
