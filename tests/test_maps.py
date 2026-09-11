@@ -231,6 +231,20 @@ def test_matrix_not_found_and_synthetic(client: TestClient):
     assert synthetic.json()[0]["distanceMeters"] > 0
 
 
+def test_integer_travel_mode_enum(client: TestClient):
+    response = client.post(
+        f"{MAPS}/directions/v2:computeRoutes",
+        json={
+            "origin": {"address": "San Francisco, CA"},
+            "destination": {"address": "Los Angeles, CA"},
+            "travelMode": 1,
+        },
+        headers=FIELD_MASK,
+    )
+    assert response.status_code == 200
+    assert response.json()["routes"][0]["distanceMeters"] == 615337
+
+
 def test_maps_requires_auth(client: TestClient):
     response = client.post(
         f"{MAPS}/directions/v2:computeRoutes",

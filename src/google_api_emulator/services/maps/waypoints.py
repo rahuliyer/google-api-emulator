@@ -8,6 +8,39 @@ LATLNG_TOLERANCE = 0.01
 
 DRIVE_MODES = frozenset({"DRIVE", "TWO_WHEELER"})
 TRAVEL_MODES = frozenset({"DRIVE", "WALK", "BICYCLE", "TWO_WHEELER", "TRANSIT"})
+TRAVEL_MODE_BY_NUMBER = {
+    0: "DRIVE",
+    1: "DRIVE",
+    2: "BICYCLE",
+    3: "WALK",
+    4: "TWO_WHEELER",
+    5: "TRANSIT",
+}
+ROUTING_PREFERENCE_BY_NUMBER = {
+    0: "ROUTING_PREFERENCE_UNSPECIFIED",
+    1: "TRAFFIC_UNAWARE",
+    2: "TRAFFIC_AWARE",
+    3: "TRAFFIC_AWARE_OPTIMAL",
+}
+UNITS_BY_NUMBER = {0: "METRIC", 1: "METRIC", 2: "IMPERIAL"}
+POLYLINE_ENCODING_BY_NUMBER = {0: "ENCODED_POLYLINE", 1: "ENCODED_POLYLINE", 2: "GEO_JSON_LINESTRING"}
+REQUEST_ALIASES = {
+    "travel_mode": "travelMode",
+    "routing_preference": "routingPreference",
+    "polyline_quality": "polylineQuality",
+    "polyline_encoding": "polylineEncoding",
+    "departure_time": "departureTime",
+    "arrival_time": "arrivalTime",
+    "compute_alternative_routes": "computeAlternativeRoutes",
+    "route_modifiers": "routeModifiers",
+    "language_code": "languageCode",
+    "region_code": "regionCode",
+    "optimize_waypoint_order": "optimizeWaypointOrder",
+    "requested_reference_routes": "requestedReferenceRoutes",
+    "extra_computations": "extraComputations",
+    "traffic_model": "trafficModel",
+    "transit_preferences": "transitPreferences",
+}
 SPEED_MPS = {
     "DRIVE": 13.4,
     "TWO_WHEELER": 11.0,
@@ -64,11 +97,44 @@ def protobuf_duration(seconds: int) -> str:
     return f"{int(seconds)}s"
 
 
-def normalize_travel_mode(value: str | None) -> str:
-    mode = (value or "DRIVE").strip()
-    if mode in {"", "TRAVEL_MODE_UNSPECIFIED"}:
+def coerce_enum(value: Any, by_number: dict[int, str] | None = None) -> str | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, int):
+        if by_number is None:
+            return str(value)
+        return by_number.get(value, str(value))
+    return str(value).strip()
+
+
+def normalize_travel_mode(value: Any) -> str:
+    mode = coerce_enum(value, TRAVEL_MODE_BY_NUMBER)
+    if not mode or mode in {"TRAVEL_MODE_UNSPECIFIED"}:
         return "DRIVE"
     return mode
+
+
+def normalize_routing_preference(value: Any) -> str | None:
+    return coerce_enum(value, ROUTING_PREFERENCE_BY_NUMBER)
+
+
+def normalize_units(value: Any) -> str:
+    units = coerce_enum(value, UNITS_BY_NUMBER)
+    if not units or units in {"UNITS_UNSPECIFIED"}:
+        return "METRIC"
+    return units
+
+
+def normalize_polyline_encoding(value: Any) -> str | None:
+    return coerce_enum(value, POLYLINE_ENCODING_BY_NUMBER)
+
+
+def camelize_request(body: dict[str, Any] | None) -> dict[str, Any]:
+    request = dict(body or {})
+    for snake, camel in REQUEST_ALIASES.items():
+        if snake in request and camel not in request:
+            request[camel] = request[snake]
+    return request
 
 
 def waypoints_compatible(request_wp: dict[str, Any] | None, fixture_wp: dict[str, Any] | None) -> bool:

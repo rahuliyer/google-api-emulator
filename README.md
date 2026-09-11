@@ -99,19 +99,23 @@ http://127.0.0.1:8080/services/maps
 ```
 
 ```python
-from google.auth.transport.requests import AuthorizedSession
+from google.api_core.client_options import ClientOptions
+from google.maps import routing_v2
 from google.oauth2.credentials import Credentials
 
-session = AuthorizedSession(Credentials(token="any-token"))
-session.post(
-    "http://127.0.0.1:8080/services/maps/directions/v2:computeRoutes",
-    json={
+maps = routing_v2.RoutesClient(
+    credentials=Credentials(token="any-token"),
+    client_options=ClientOptions(api_endpoint="http://127.0.0.1:8080/services/maps"),
+    transport="rest",
+)
+maps.compute_routes(
+    request={
         "origin": {"address": "San Francisco, CA"},
         "destination": {"address": "Los Angeles, CA"},
-        "travelMode": "DRIVE",
+        "travel_mode": "DRIVE",
     },
-    headers={"X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline"},
-).json()
+    metadata=[("x-goog-fieldmask", "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline")],
+)
 ```
 
 ```http

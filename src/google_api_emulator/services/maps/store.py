@@ -11,13 +11,17 @@ from google_api_emulator.services.maps.polyline import encode_polyline
 from google_api_emulator.services.maps.waypoints import (
     DRIVE_MODES,
     TRAVEL_MODES,
+    camelize_request,
     compact,
     duration_seconds,
     haversine_meters,
     intermediates_compatible,
     lat_lng,
     location_obj,
+    normalize_polyline_encoding,
+    normalize_routing_preference,
     normalize_travel_mode,
+    normalize_units,
     protobuf_duration,
     waypoints_compatible,
 )
@@ -117,7 +121,7 @@ class MapsStore:
         )
 
     def compute_routes(self, body: dict[str, Any] | None, field_mask: str) -> dict[str, Any]:
-        request = body or {}
+        request = camelize_request(body)
         origin = request.get("origin")
         destination = request.get("destination")
         if not origin or not destination:
@@ -128,7 +132,7 @@ class MapsStore:
         if len(intermediates) > MAX_INTERMEDIATES:
             raise invalid_argument(f"At most {MAX_INTERMEDIATES} intermediate waypoints are supported.")
         travel_mode = self._validate_travel_mode(request)
-        routing_preference = request.get("routingPreference")
+        routing_preference = normalize_routing_preference(request.get("routingPreference"))
         self._validate_routing_preference(travel_mode, routing_preference)
         self._validate_times(request, travel_mode)
         self._validate_extra_computations(request.get("extraComputations") or [])
@@ -140,7 +144,7 @@ class MapsStore:
                 raise invalid_argument(
                     "optimizeWaypointOrder requires routes.optimizedIntermediateWaypointIndex in the field mask."
                 )
-        units = (request.get("units") or "METRIC").strip() or "METRIC"
+        units = normalize_units(request.get("units"))
         language = request.get("languageCode") or "en-US"
 
         matched = self._match_route(origin, destination, intermediates, travel_mode)
@@ -170,7 +174,7 @@ class MapsStore:
         if request.get("optimizeWaypointOrder") and intermediates:
             for route in routes:
                 route["optimizedIntermediateWaypointIndex"] = list(range(len(intermediates)))
-        if request.get("polylineEncoding") == "GEO_JSON_LINESTRING":
+        if normalize_polyline_encoding(request.get("polylineEncoding")) == "GEO_JSON_LINESTRING":
             for route in routes:
                 self._to_geojson(route)
         if routing_preference in {"TRAFFIC_AWARE", "TRAFFIC_AWARE_OPTIMAL"}:
@@ -180,7 +184,7 @@ class MapsStore:
         return apply_field_mask(compact(response), field_mask)
 
     def compute_route_matrix(self, body: dict[str, Any] | None, field_mask: str) -> list[dict[str, Any]]:
-        request = body or {}
+        request = camelize_request(body)
         origins = list(request.get("origins") or [])
         destinations = list(request.get("destinations") or [])
         if not origins or not destinations:
@@ -188,7 +192,7 @@ class MapsStore:
         origin_waypoints = [self._matrix_waypoint(item, "origin") for item in origins]
         destination_waypoints = [self._matrix_waypoint(item, "destination") for item in destinations]
         travel_mode = self._validate_travel_mode(request)
-        routing_preference = request.get("routingPreference")
+        routing_preference = normalize_routing_preference(request.get("routingPreference"))
         self._validate_routing_preference(travel_mode, routing_preference)
         self._validate_times(request, travel_mode)
         self._validate_extra_computations(request.get("extraComputations") or [])
@@ -206,7 +210,7 @@ class MapsStore:
         if address_or_place > MAX_ADDRESS_PLACE_WAYPOINTS:
             raise invalid_argument("At most 50 origins and destinations may be specified as placeId or address.")
 
-        units = (request.get("units") or "METRIC").strip() or "METRIC"
+        units = normalize_units(request.get("units"))
         language = request.get("languageCode") or "en-US"
         matched = self._match_matrix(origin_waypoints, destination_waypoints, travel_mode)
         if matched is not None:
@@ -252,13 +256,17 @@ class MapsStore:
         if request.get("arrivalTime") and travel_mode != "TRANSIT":
             raise invalid_argument("arrivalTime can only be set when travelMode is TRANSIT.")
 
-    def _validate_extra_computations(self, extras: list[str]) -> None:
-        if "EXTRA_COMPUTATION_UNSPECIFIED" in extras:
-            raise invalid_argument("extraComputations cannot include EXTRA_COMPUTATION_UNSPECIFIED.")
+    def _validate_extra_computations(self, extras: list[Any]) -> None:
+        for extra in extras:
+            name = extra if isinstance(extra, str) else str(extra)
+            if name in {"EXTRA_COMPUTATION_UNSPECIFIED", "0", 0}:
+                raise invalid_argument("extraComputations cannot include EXTRA_COMPUTATION_UNSPECIFIED.")
 
-    def _validate_reference_routes(self, routes: list[str]) -> None:
-        if "REFERENCE_ROUTE_UNSPECIFIED" in routes:
-            raise invalid_argument("requestedReferenceRoutes cannot include REFERENCE_ROUTE_UNSPECIFIED.")
+    def _validate_reference_routes(self, routes: list[Any]) -> None:
+        for route in routes:
+            name = route if isinstance(route, str) else str(route)
+            if name in {"REFERENCE_ROUTE_UNSPECIFIED", "0", 0}:
+                raise invalid_argument("requestedReferenceRoutes cannot include REFERENCE_ROUTE_UNSPECIFIED.")
 
     def _match_route(
         self,

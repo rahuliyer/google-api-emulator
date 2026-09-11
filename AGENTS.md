@@ -55,13 +55,15 @@ Confirm `GET http://127.0.0.1:18080/health` returns `{"status":"ok"}`. `/health`
 ### 3. Official Python client
 
 ```bash
-uv run --with google-api-python-client --with google-auth --with google-auth-httplib2 python
+uv run --with google-api-python-client --with google-auth --with google-auth-httplib2 --with google-maps-routing python
 ```
 
 ```python
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from google.api_core.client_options import ClientOptions
+from google.maps import routing_v2
 
 people = build(
     "people",
@@ -81,9 +83,14 @@ calendar = build(
     credentials=Credentials(token="verify-token"),
     client_options={"api_endpoint": "http://127.0.0.1:18080/services/calendar"},
 )
+maps = routing_v2.RoutesClient(
+    credentials=Credentials(token="verify-token"),
+    client_options=ClientOptions(api_endpoint="http://127.0.0.1:18080/services/maps"),
+    transport="rest",
+)
 ```
 
-Maps Routes is not in `google-api-python-client` discovery. Drive it with `google-auth` `AuthorizedSession` (sends Bearer) or host-swap HTTP:
+Maps Routes is not in `google-api-python-client` discovery. The GAPIC REST client (`google-maps-routing`, `transport="rest"`) posts to `/directions/v2:computeRoutes` and sends integer enums (`$alt=json;enum-encoding=int`). Host-swap HTTP and `google-auth` `AuthorizedSession` also work:
 
 ```python
 from google.auth.transport.requests import AuthorizedSession
@@ -149,7 +156,7 @@ Places (httpx; `X-Goog-Api-Key: verify-token`):
 
 Maps (Routes):
 
-- `POST /services/maps/directions/v2:computeRoutes` with fixture origin/destination addresses returns fixture `distanceMeters` / `duration`; field mask is required (`X-Goog-FieldMask` or `fields`)
+- `maps.compute_routes` (GAPIC REST) with fixture origin/destination addresses returns fixture `distanceMeters` / `duration`; field mask is required (`X-Goog-FieldMask` or `fields`)
 - Prefix/case-insensitive address match; `placeId` and nearby `latLng` hit the same fixture
 - `computeAlternativeRoutes: true` returns the fixture alternate; omitted returns one route
 - Unmatched addresses return `{ "routes": [] }`; latLng pairs without a fixture synthesize distance/duration/polyline
