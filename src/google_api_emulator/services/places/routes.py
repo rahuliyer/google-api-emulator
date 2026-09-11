@@ -4,11 +4,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 
-from google_api_emulator.auth import require_places_credential
+from google_api_emulator.auth import require_maps_credential
 from google_api_emulator.services.places.mask import apply_field_mask, place_paths, require_field_mask
 from google_api_emulator.services.places.store import PlacesStore
 
-router = APIRouter(prefix="/services/places", dependencies=[Depends(require_places_credential)])
+router = APIRouter(prefix="/services/places", dependencies=[Depends(require_maps_credential)])
 
 
 def _store(request: Request) -> PlacesStore:
@@ -19,7 +19,7 @@ def _store(request: Request) -> PlacesStore:
 def search_text(
     request: Request,
     body: dict[str, Any],
-    _: str = Depends(require_places_credential),
+    _: str = Depends(require_maps_credential),
 ) -> dict[str, Any]:
     paths = place_paths(require_field_mask(request))
     places = [_masked_place(place, paths) for place in _store(request).search_text(body or {})]
@@ -30,7 +30,7 @@ def search_text(
 def search_nearby(
     request: Request,
     body: dict[str, Any],
-    _: str = Depends(require_places_credential),
+    _: str = Depends(require_maps_credential),
 ) -> dict[str, Any]:
     paths = place_paths(require_field_mask(request))
     places = [_masked_place(place, paths) for place in _store(request).search_nearby(body or {})]
@@ -41,7 +41,7 @@ def search_nearby(
 def autocomplete(
     request: Request,
     body: dict[str, Any],
-    _: str = Depends(require_places_credential),
+    _: str = Depends(require_maps_credential),
 ) -> dict[str, Any]:
     paths = require_field_mask(request)
     suggestions = _store(request).autocomplete(body or {})
@@ -52,7 +52,7 @@ def autocomplete(
 def get_place(
     request: Request,
     place_id: str,
-    _: str = Depends(require_places_credential),
+    _: str = Depends(require_maps_credential),
 ) -> dict[str, Any]:
     paths = require_field_mask(request)
     place = _store(request).get(place_id)

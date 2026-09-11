@@ -72,7 +72,7 @@ def require_user(request: Request) -> User:
     )
 
 
-def require_places_credential(request: Request) -> str:
+def require_maps_credential(request: Request) -> str:
     header = request.headers.get("Authorization")
     token = ""
     if header and header.startswith("Bearer "):
@@ -88,3 +88,6 @@ def require_places_credential(request: Request) -> str:
     if state.allowed_tokens is not None and token not in state.allowed_tokens:
         raise unauthenticated("Request had invalid authentication credentials.")
     return token
+
+
+require_places_credential = require_maps_credential

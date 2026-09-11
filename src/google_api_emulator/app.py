@@ -11,6 +11,7 @@ from google_api_emulator.services.calendar.routes import router as calendar_rout
 from google_api_emulator.services.gmail.routes import router as gmail_router
 from google_api_emulator.services.people.routes import router as people_router
 from google_api_emulator.services.places.routes import router as places_router
+from google_api_emulator.services.routes.routes import router as routes_router
 from google_api_emulator.state import EmulatorState
 
 
@@ -29,4 +30,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(calendar_router)
     app.include_router(calendar_client_router)
     app.include_router(places_router)
+    app.include_router(routes_router)
     return app

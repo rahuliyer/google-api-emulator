@@ -347,3 +347,38 @@ def seed_places(db: Database, fixture: PlacesFixtureFile | None) -> None:
     store = PlacesStore(db)
     for place in fixture.places:
         store.upsert(place.as_place())
+
+
+class RouteFixture(BaseModel):
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    id: str
+    origin: dict[str, Any]
+    destination: dict[str, Any]
+    travelMode: str | None = None
+    route: dict[str, Any]
+    alternatives: list[dict[str, Any]] = Field(default_factory=list)
+
+    def as_record(self) -> dict[str, Any]:
+        return self.model_dump(exclude_none=True)
+
+
+class RoutesFixtureFile(BaseModel):
+    routes: list[RouteFixture] = Field(default_factory=list)
+
+
+def load_routes_fixture(fixtures_dir: Path) -> RoutesFixtureFile | None:
+    path = fixtures_dir / "routes.json"
+    if not path.is_file():
+        return None
+    return RoutesFixtureFile.model_validate_json(path.read_text())
+
+
+def seed_routes(db: Database, fixture: RoutesFixtureFile | None) -> None:
+    if fixture is None:
+        return
+    from google_api_emulator.services.routes.store import RoutesStore
+
+    store = RoutesStore(db)
+    for record in fixture.routes:
+        store.upsert(record.as_record())

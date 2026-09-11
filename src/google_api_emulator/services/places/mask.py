@@ -33,14 +33,18 @@ def require_field_mask(request: Request) -> list[str]:
 
 
 def place_paths(paths: list[str]) -> list[str]:
+    return nested_paths(paths, "places")
+
+
+def nested_paths(paths: list[str], prefix: str) -> list[str]:
     if "*" in paths:
         return ["*"]
     stripped: list[str] = []
     for path in paths:
-        if path == "places":
+        if path == prefix:
             return ["*"]
-        if path.startswith("places."):
-            stripped.append(path.removeprefix("places."))
+        if path.startswith(f"{prefix}."):
+            stripped.append(path.removeprefix(f"{prefix}."))
         else:
             stripped.append(path)
     return stripped
