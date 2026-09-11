@@ -142,6 +142,99 @@ class CalendarFixtureFile(BaseModel):
     users: list[CalendarUserFixture] = Field(default_factory=list)
 
 
+class MapsWaypointFixture(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    address: str | None = None
+    placeId: str | None = None
+    location: dict[str, Any] | None = None
+    via: bool | None = None
+
+    def as_waypoint(self) -> dict[str, Any]:
+        return {
+            key: value
+            for key, value in {
+                "address": self.address,
+                "placeId": self.placeId,
+                "location": self.location,
+                "via": self.via,
+            }.items()
+            if value is not None
+        }
+
+
+class MapsRouteFixture(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    origin: MapsWaypointFixture
+    destination: MapsWaypointFixture
+    intermediates: list[MapsWaypointFixture] = Field(default_factory=list)
+    travelMode: str = "DRIVE"
+    distanceMeters: int | None = None
+    duration: str | None = None
+    staticDuration: str | None = None
+    description: str | None = None
+    routeLabels: list[str] | None = None
+    polyline: dict[str, Any] | None = None
+    alternateRoutes: list[dict[str, Any]] = Field(default_factory=list)
+    routes: list[dict[str, Any]] | None = None
+    response: dict[str, Any] | None = None
+    languageCode: str | None = None
+    units: str | None = None
+
+    def as_body(self) -> dict[str, Any]:
+        return {
+            "distanceMeters": self.distanceMeters,
+            "duration": self.duration,
+            "staticDuration": self.staticDuration,
+            "description": self.description,
+            "routeLabels": self.routeLabels,
+            "polyline": self.polyline,
+            "alternateRoutes": self.alternateRoutes,
+            "routes": self.routes,
+            "response": self.response,
+            "languageCode": self.languageCode,
+            "units": self.units,
+        }
+
+
+class MapsMatrixElementFixture(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    originIndex: int
+    destinationIndex: int
+    status: dict[str, Any] = Field(default_factory=dict)
+    condition: str = "ROUTE_EXISTS"
+    distanceMeters: int | None = None
+    duration: str | None = None
+    staticDuration: str | None = None
+
+    def as_element(self) -> dict[str, Any]:
+        return {
+            "originIndex": self.originIndex,
+            "destinationIndex": self.destinationIndex,
+            "status": self.status,
+            "condition": self.condition,
+            "distanceMeters": self.distanceMeters,
+            "duration": self.duration,
+            "staticDuration": self.staticDuration,
+        }
+
+
+class MapsMatrixFixture(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    origins: list[MapsWaypointFixture]
+    destinations: list[MapsWaypointFixture]
+    travelMode: str = "DRIVE"
+    elements: list[MapsMatrixElementFixture] = Field(default_factory=list)
+
+
+class MapsFixtureFile(BaseModel):
+    routes: list[MapsRouteFixture] = Field(default_factory=list)
+    matrices: list[MapsMatrixFixture] = Field(default_factory=list)
+
+
 def load_allowed_tokens(fixtures_dir: Path) -> set[str] | None:
     path = fixtures_dir / "allowed_tokens.json"
     if not path.is_file():
@@ -309,6 +402,41 @@ def seed_calendar(db: Database, fixture: CalendarFixtureFile | None) -> None:
                 store.patch_calendar(owner, resolved, fields, None)
             for event in calendar.events:
                 store.insert_event(owner, resolved, event.as_body())
+
+
+def load_maps_fixture(fixtures_dir: Path) -> MapsFixtureFile | None:
+    path = fixtures_dir / "maps.json"
+    if not path.is_file():
+        return None
+    return MapsFixtureFile.model_validate_json(path.read_text())
+
+
+def seed_maps(db: Database, fixture: MapsFixtureFile | None) -> None:
+    from google_api_emulator.services.maps.store import MapsStore, build_fixture_route
+    from google_api_emulator.services.maps.waypoints import normalize_travel_mode
+
+    if fixture is None:
+        return
+    store = MapsStore(db)
+    for route in fixture.routes:
+        origin = route.origin.as_waypoint()
+        destination = route.destination.as_waypoint()
+        intermediates = [item.as_waypoint() for item in route.intermediates]
+        travel_mode = normalize_travel_mode(route.travelMode)
+        store.insert_route_fixture(
+            origin=origin,
+            destination=destination,
+            intermediates=intermediates,
+            travel_mode=travel_mode,
+            response=build_fixture_route(origin, destination, intermediates, travel_mode, route.as_body()),
+        )
+    for matrix in fixture.matrices:
+        store.insert_matrix_fixture(
+            origins=[item.as_waypoint() for item in matrix.origins],
+            destinations=[item.as_waypoint() for item in matrix.destinations],
+            travel_mode=normalize_travel_mode(matrix.travelMode),
+            elements=[item.as_element() for item in matrix.elements],
+        )
 
 
 def resource_id(resource: dict) -> str:

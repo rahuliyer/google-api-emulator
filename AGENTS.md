@@ -6,7 +6,7 @@ Guidance for coding agents working in this repository.
 
 A local Google API emulator for testing agents. Swap the Google host for this process; keep official REST paths, camelCase JSON, field masks, etags, and Google error envelopes.
 
-People, Gmail, Calendar, and Places (New) are implemented.
+People, Gmail, Calendar, Places (New), and Maps (Routes API) are implemented.
 
 ## Commands
 
@@ -20,7 +20,7 @@ Python ≥ 3.12. Package manager is **uv**. Do not add Poetry/pipenv.
 
 ## Verification
 
-`uv run pytest` is not enough after People, Gmail, Calendar, or Places route changes. Start uvicorn and drive People/Gmail/Calendar with `google-api-python-client`. Places (New) is not a discovery API — use httpx (or `google-maps-places` REST) with `X-Goog-Api-Key` and `X-Goog-FieldMask`. `TestClient` never hits official-client URL encoding (`alt=json`, Bearer from `Credentials`) the same way.
+`uv run pytest` is not enough after People, Gmail, Calendar, Places, or Maps route changes. Start uvicorn and drive People/Gmail/Calendar with `google-api-python-client`. Places (New) is not a discovery API — use httpx (or `google-maps-places` REST) with `X-Goog-Api-Key` and `X-Goog-FieldMask`. Maps REST uses `google-auth` or `google-maps-routing`. `TestClient` never hits official-client URL encoding (`alt=json`, Bearer from `Credentials`) the same way.
 
 ### 1. Fixture in `/tmp`
 
@@ -37,6 +37,8 @@ mkdir -p /tmp/google_api_emulator_fixtures
 `/tmp/google_api_emulator_fixtures/calendar.json` should include that user’s email, a primary calendar (`id` `primary` or omitted), `timeZone`, and at least two events (one timed `dateTime`, one all-day `date`).
 
 `/tmp/google_api_emulator_fixtures/places.json` should include at least three places (different `primaryType`s) with `id`, `displayName`, `formattedAddress`, `location`, and `types`. Places is a global catalog, not keyed by People email.
+
+`/tmp/google_api_emulator_fixtures/maps.json` should include at least two `routes` with origin/destination `address` (and `location.latLng`), `travelMode`, `distanceMeters`, and `duration`. Optional `alternateRoutes` cover `computeAlternativeRoutes`.
 
 ### 2. Start the emulator
 
@@ -81,7 +83,25 @@ calendar = build(
 )
 ```
 
-`api_endpoint` with or without a trailing slash both work. Do not use `AnonymousCredentials` — the emulator requires `Authorization: Bearer`. Calendar’s official client replaces `baseUrl` (already `/calendar/v3`), so `api_endpoint` is `/services/calendar`; host-swap HTTP still uses `/services/calendar/calendar/v3/...`.
+Maps Routes is not in `google-api-python-client` discovery. Drive it with `google-auth` `AuthorizedSession` (sends Bearer) or host-swap HTTP:
+
+```python
+from google.auth.transport.requests import AuthorizedSession
+from google.oauth2.credentials import Credentials
+
+session = AuthorizedSession(Credentials(token="verify-token"))
+session.headers["X-Goog-FieldMask"] = "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline"
+routes = session.post(
+    "http://127.0.0.1:18080/services/maps/directions/v2:computeRoutes",
+    json={
+        "origin": {"address": "San Francisco, CA"},
+        "destination": {"address": "Los Angeles, CA"},
+        "travelMode": "DRIVE",
+    },
+).json()
+```
+
+`api_endpoint` with or without a trailing slash both work. Do not use `AnonymousCredentials` — the emulator requires `Authorization: Bearer`. Calendar’s official client replaces `baseUrl` (already `/calendar/v3`), so `api_endpoint` is `/services/calendar`; host-swap HTTP still uses `/services/calendar/calendar/v3/...`. Maps replaces `routes.googleapis.com`, so host-swap HTTP uses `/services/maps/directions/v2:computeRoutes`. Production Maps also accepts `X-Goog-Api-Key`; the emulator treats that header as the same token as Bearer.
 
 ### 4. Checks that must pass
 
@@ -127,6 +147,15 @@ Places (httpx; `X-Goog-Api-Key: verify-token`):
 - No key and no Bearer → 401 `UNAUTHENTICATED`
 - Omit field mask → 400 `INVALID_ARGUMENT`
 
+Maps (Routes):
+
+- `POST /services/maps/directions/v2:computeRoutes` with fixture origin/destination addresses returns fixture `distanceMeters` / `duration`; field mask is required (`X-Goog-FieldMask` or `fields`)
+- Prefix/case-insensitive address match; `placeId` and nearby `latLng` hit the same fixture
+- `computeAlternativeRoutes: true` returns the fixture alternate; omitted returns one route
+- Unmatched addresses return `{ "routes": [] }`; latLng pairs without a fixture synthesize distance/duration/polyline
+- `POST /services/maps/distanceMatrix/v2:computeRouteMatrix` returns a JSON array of elements (`originIndex` + `destinationIndex`); fixture pairs `ROUTE_EXISTS`, unknown addresses `ROUTE_NOT_FOUND`
+- Request without `Authorization` (and without `X-Goog-Api-Key`) is 401 `UNAUTHENTICATED`
+
 Stop the server when done. Do not leave uvicorn on 18080.
 
 ## Layout
@@ -136,7 +165,8 @@ Stop the server when done. Do not leave uvicorn on 18080.
 - `src/google_api_emulator/services/gmail/` — Gmail routes, MIME, mailbox store
 - `src/google_api_emulator/services/calendar/` — Calendar routes, calendars, events, freeBusy
 - `src/google_api_emulator/services/places/` — Places (New) search, nearby, details, autocomplete
-- `fixtures/people.json`, `fixtures/gmail.json`, `fixtures/calendar.json`, `fixtures/places.json` — per-API seeds
+- `src/google_api_emulator/services/maps/` — Routes API `computeRoutes` / `computeRouteMatrix`
+- `fixtures/people.json`, `fixtures/gmail.json`, `fixtures/calendar.json`, `fixtures/places.json`, `fixtures/maps.json` — per-API seeds
 - `tests/` — pytest + httpx `TestClient`
 
 New Google APIs go in `services/{name}/` and mount at `/services/{name}` with Google’s published path after that prefix:
@@ -147,6 +177,7 @@ New Google APIs go in `services/{name}/` and mount at `/services/{name}` with Go
 | Gmail | `/services/gmail` (`gmail.googleapis.com`) | `/gmail/v1/...` |
 | Calendar | `/services/calendar` (`www.googleapis.com`) | `/calendar/v3/...` |
 | Places | `/services/places` (`places.googleapis.com`) | `/v1/places...` |
+| Maps | `/services/maps` (`routes.googleapis.com`) | `/directions/v2:computeRoutes`, `/distanceMatrix/v2:computeRouteMatrix` |
 
 Do not flatten everything to `/v1/...`.
 
@@ -154,7 +185,7 @@ Do not flatten everything to `/v1/...`.
 
 - Wire JSON is proto-JSON **camelCase**. Never snake_case on `/services/...` responses.
 - Errors: `{"error": {"code": 401, "message": "...", "status": "UNAUTHENTICATED"}}`
-- `/services/...` requires `Authorization: Bearer <token>` except Places, which also accepts `X-Goog-Api-Key` or `key`. `/health` and `POST /reset` do not.
+- `/services/...` requires `Authorization: Bearer <token>` except Places and Maps, which also accept `X-Goog-Api-Key` (Places also accepts `key`). `/health` and `POST /reset` do not.
 - `fixtures/allowed_tokens.json` is optional. Absent → accept any token. Present → only those tokens. Empty list → reject all.
 - Token listed on a `people.json` user selects that user; otherwise the first fixture user.
 - Startup and `POST /reset` drop SQLite and reload fixtures. The DB file is a working copy, not durable account state.
@@ -162,8 +193,9 @@ Do not flatten everything to `/v1/...`.
 - Gmail: `userId` is `me` or the authenticated email (else 403); list returns `{id, threadId}` only; honor `format`, `q`, `labelIds`, `includeSpamTrash`; send uses base64url RFC822; system labels cannot be deleted.
 - Calendar: `calendarId` is `primary` or the calendar id (primary id is the user email); honor `timeMin`/`timeMax`/`q`; insert requires `start` and `end`; delete sets `status=cancelled`; `If-Match` (or body `etag`) mismatch is 412.
 - Places: catalog is global; `X-Goog-FieldMask` (or `fields` / `$fields`) is required; searchText needs `textQuery`; searchNearby needs `locationRestriction.circle`; autocomplete empty `input` returns no suggestions.
+- Maps: required field mask; match fixture routes by address / placeId / latLng; honor `travelMode` and `computeAlternativeRoutes`; matrix response is a JSON array; missing origin/destination is 400.
 
-Out of scope unless asked: OAuth/OIDC, discovery docs, quotas, contact groups, directory, photos, sync tokens, batch mutate, Gmail settings/CSE/watch/history/import, Calendar ACL/watch/settings/recurring expansion, Place Photos/routing/session tokens, Places API (Legacy), multi-worker.
+Out of scope unless asked: OAuth/OIDC, discovery docs, quotas, contact groups, directory, photos, sync tokens, batch mutate, Gmail settings/CSE/watch/history/import, Calendar ACL/watch/settings/recurring expansion, Place Photos/routing/session tokens, Places API (Legacy), Geocoding/Roads/Navigation SDK, multi-worker.
 
 ## Adding an API
 

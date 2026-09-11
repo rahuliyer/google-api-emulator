@@ -1,0 +1,46 @@
+{
+  "routes": [
+    {
+      "origin": {
+        "address": "San Francisco, CA",
+        "placeId": "ChIJIQBpAG2ahYAR_6128GcTUEo",
+        "location": { "latLng": { "latitude": 37.7749, "longitude": -122.4194 } }
+      },
+      "destination": {
+        "address": "Los Angeles, CA",
+        "placeId": "ChIJE9on3F3HwoAR9AhGJW_fL-I",
+        "location": { "latLng": { "latitude": 34.0522, "longitude": -118.2437 } }
+      },
+      "travelMode": "DRIVE",
+      "distanceMeters": 615337,
+      "duration": "19812s",
+      "staticDuration": "18600s",
+      "description": "I-5 S",
+      "alternateRoutes": [
+        {
+          "distanceMeters": 655210,
+          "duration": "21600s",
+          "staticDuration": "20400s",
+          "description": "US-101 S"
+        }
+      ]
+    },
+    {
+      "origin": {
+        "address": "San Francisco, CA",
+        "placeId": "ChIJIQBpAG2ahYAR_6128GcTUEo",
+        "location": { "latLng": { "latitude": 37.7749, "longitude": -122.4194 } }
+      },
+      "destination": {
+        "address": "San Jose, CA",
+        "placeId": "ChIJ9T_5iuTKj4ARe3GfygqMnbk",
+        "location": { "latLng": { "latitude": 37.3382, "longitude": -121.8863 } }
+      },
+      "travelMode": "DRIVE",
+      "distanceMeters": 76320,
+      "duration": "3600s",
+      "staticDuration": "3300s",
+      "description": "US-101 S"
+    }
+  ]
+}

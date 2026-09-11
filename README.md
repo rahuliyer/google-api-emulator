@@ -2,7 +2,7 @@
 
 Local stand-in for Google APIs so you can test an agent without hitting production. Swap the Google host for this process; request paths, JSON, field masks, etags, and errors stay Google-shaped.
 
-People, Gmail, Calendar, and Places (New) are implemented.
+People, Gmail, Calendar, Places (New), and Maps (Routes API) are implemented.
 
 ## Run
 
@@ -90,6 +90,38 @@ X-Goog-FieldMask: places.id,places.displayName
 
 `Authorization: Bearer` is also accepted. `google-maps-places` clients that replace the host should set `api_endpoint` to `http://127.0.0.1:8080/services/places` and `transport="rest"`.
 
+## Point an agent at Maps (Routes)
+
+Replace `https://routes.googleapis.com` with:
+
+```text
+http://127.0.0.1:8080/services/maps
+```
+
+```python
+from google.auth.transport.requests import AuthorizedSession
+from google.oauth2.credentials import Credentials
+
+session = AuthorizedSession(Credentials(token="any-token"))
+session.post(
+    "http://127.0.0.1:8080/services/maps/directions/v2:computeRoutes",
+    json={
+        "origin": {"address": "San Francisco, CA"},
+        "destination": {"address": "Los Angeles, CA"},
+        "travelMode": "DRIVE",
+    },
+    headers={"X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline"},
+).json()
+```
+
+```http
+POST /services/maps/directions/v2:computeRoutes
+Authorization: Bearer any-token
+X-Goog-FieldMask: routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline
+```
+
+`computeRouteMatrix` is `POST /services/maps/distanceMatrix/v2:computeRouteMatrix` and returns a JSON array. Maps accepts `X-Goog-Api-Key` as well as Bearer.
+
 ## Point an agent at People
 
 Replace `https://people.googleapis.com` with:
@@ -127,12 +159,13 @@ Later APIs keep Google’s published path after `/services/{name}`:
 | Gmail | `http://127.0.0.1:8080/services/gmail` | `/services/gmail/gmail/v1/users/me/messages` |
 | Calendar | `http://127.0.0.1:8080/services/calendar` | `/services/calendar/calendar/v3/calendars/primary/events` |
 | Places | `http://127.0.0.1:8080/services/places` | `/services/places/v1/places:searchText` |
+| Maps | `http://127.0.0.1:8080/services/maps` | `/services/maps/directions/v2:computeRoutes` |
 
 Calendar client libraries that replace `rootUrl + servicePath` (`google-api-python-client`) should set `api_endpoint` to `http://127.0.0.1:8080/services/calendar`. Host-swap HTTP still uses `/services/calendar/calendar/v3/...`.
 
 ## Auth
 
-Every `/services/...` route requires credentials. People, Gmail, and Calendar need `Authorization: Bearer <token>`. Places also accepts `X-Goog-Api-Key` or `key`. Missing credentials return Google’s `UNAUTHENTICATED` error body.
+Every `/services/...` route requires credentials. People, Gmail, and Calendar need `Authorization: Bearer <token>`. Places and Maps also accept `X-Goog-Api-Key` (Places also accepts `key`). Missing credentials return Google’s `UNAUTHENTICATED` error body.
 
 - If `fixtures/allowed_tokens.json` is **absent**, any non-empty token is accepted.
 - If it is **present**, only listed tokens are accepted.
@@ -147,7 +180,7 @@ If the token appears on a user in `fixtures/people.json`, that user’s contacts
 
 ## Fixtures
 
-One JSON file per API: [`fixtures/people.json`](fixtures/people.json), [`fixtures/gmail.json`](fixtures/gmail.json), [`fixtures/calendar.json`](fixtures/calendar.json), [`fixtures/places.json`](fixtures/places.json). Gmail mailboxes and Calendar accounts are keyed by email and must match a People user. Places is a global catalog.
+One JSON file per API: [`fixtures/people.json`](fixtures/people.json), [`fixtures/gmail.json`](fixtures/gmail.json), [`fixtures/calendar.json`](fixtures/calendar.json), [`fixtures/places.json`](fixtures/places.json), [`fixtures/maps.json`](fixtures/maps.json). Gmail mailboxes and Calendar accounts are keyed by email and must match a People user. Places and Maps routes are global catalogs (not per-user).
 
 `POST /reset` reloads every fixture file in the directory (including `allowed_tokens.json` if you add it).
 
@@ -181,6 +214,24 @@ Places fixtures are Place objects (`id`, `displayName`, `location`, `types`):
   "location": { "latitude": 37.7955, "longitude": -122.3937 },
   "types": ["cafe", "coffee_shop"],
   "primaryType": "cafe"
+}
+```
+
+Maps routes match `computeRoutes` / `computeRouteMatrix` on origin and destination (`address`, `placeId`, or `location.latLng`):
+
+```json
+{
+  "origin": {
+    "address": "San Francisco, CA",
+    "location": { "latLng": { "latitude": 37.7749, "longitude": -122.4194 } }
+  },
+  "destination": {
+    "address": "Los Angeles, CA",
+    "location": { "latLng": { "latitude": 34.0522, "longitude": -118.2437 } }
+  },
+  "travelMode": "DRIVE",
+  "distanceMeters": 615337,
+  "duration": "19812s"
 }
 ```
 
@@ -250,6 +301,15 @@ Not in this slice: contact groups, directory people, photos, sync tokens, batch 
 | GET | `/services/places/v1/places/{placeId}` |
 
 `X-Goog-FieldMask` (or `fields` / `$fields`) is required. Auth is `X-Goog-Api-Key` or Bearer. Not in this slice: photos, routing, session tokens, Places API (Legacy).
+
+## Maps Routes API coverage
+
+| Method | Path |
+| --- | --- |
+| POST | `/services/maps/directions/v2:computeRoutes` |
+| POST | `/services/maps/distanceMatrix/v2:computeRouteMatrix` |
+
+Field mask is required (`X-Goog-FieldMask`, `fields`, or `$fields`). Not in this slice: Geocoding, Roads, Navigation SDK, traffic tiles, snap-to-roads.
 
 ## Tests
 
