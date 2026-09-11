@@ -1,0 +1,35 @@
+{
+  "places": [
+    {
+      "id": "ChIJCafe1",
+      "displayName": { "text": "Blue Bottle Coffee", "languageCode": "en" },
+      "formattedAddress": "1 Ferry Building, San Francisco, CA 94111",
+      "location": { "latitude": 37.7955, "longitude": -122.3937 },
+      "types": ["cafe", "coffee_shop", "food", "point_of_interest", "establishment"],
+      "primaryType": "cafe",
+      "nationalPhoneNumber": "+1 510-653-3394",
+      "rating": 4.5,
+      "userRatingCount": 2100,
+      "priceLevel": "PRICE_LEVEL_MODERATE"
+    },
+    {
+      "id": "ChIJRest2",
+      "displayName": { "text": "Zuni Cafe", "languageCode": "en" },
+      "formattedAddress": "1658 Market St, San Francisco, CA 94102",
+      "location": { "latitude": 37.7736, "longitude": -122.4217 },
+      "types": ["restaurant", "food", "point_of_interest", "establishment"],
+      "primaryType": "restaurant",
+      "nationalPhoneNumber": "+1 415-552-2522",
+      "rating": 4.4,
+      "priceLevel": "PRICE_LEVEL_EXPENSIVE"
+    },
+    {
+      "id": "ChIJPark3",
+      "displayName": { "text": "Golden Gate Park", "languageCode": "en" },
+      "formattedAddress": "San Francisco, CA 94122",
+      "location": { "latitude": 37.7694, "longitude": -122.4862 },
+      "types": ["park", "tourist_attraction", "point_of_interest"],
+      "primaryType": "park"
+    }
+  ]
+}

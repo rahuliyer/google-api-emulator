@@ -82,6 +82,11 @@ CREATE TABLE calendar_events (
     event_json TEXT NOT NULL,
     PRIMARY KEY (user_id, calendar_id, event_id)
 );
+
+CREATE TABLE maps_places (
+    place_id TEXT PRIMARY KEY,
+    place_json TEXT NOT NULL
+);
 """
 
 
@@ -102,6 +107,7 @@ class Database:
             self.conn.executescript(
                 """
                 PRAGMA foreign_keys = OFF;
+                DROP TABLE IF EXISTS maps_places;
                 DROP TABLE IF EXISTS calendar_events;
                 DROP TABLE IF EXISTS calendar_calendars;
                 DROP TABLE IF EXISTS gmail_drafts;

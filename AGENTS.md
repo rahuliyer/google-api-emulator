@@ -6,7 +6,7 @@ Guidance for coding agents working in this repository.
 
 A local Google API emulator for testing agents. Swap the Google host for this process; keep official REST paths, camelCase JSON, field masks, etags, and Google error envelopes.
 
-People, Gmail, and Calendar are implemented.
+People, Gmail, Calendar, and Places (New) are implemented.
 
 ## Commands
 
@@ -20,7 +20,7 @@ Python ≥ 3.12. Package manager is **uv**. Do not add Poetry/pipenv.
 
 ## Verification
 
-`uv run pytest` is not enough after People, Gmail, or Calendar route changes. Start uvicorn and drive it with `google-api-python-client`. `TestClient` never hits official-client URL encoding (`alt=json`, Bearer from `Credentials`) the same way.
+`uv run pytest` is not enough after People, Gmail, Calendar, or Places route changes. Start uvicorn and drive People/Gmail/Calendar with `google-api-python-client`. Places (New) is not a discovery API — use httpx (or `google-maps-places` REST) with `X-Goog-Api-Key` and `X-Goog-FieldMask`. `TestClient` never hits official-client URL encoding (`alt=json`, Bearer from `Credentials`) the same way.
 
 ### 1. Fixture in `/tmp`
 
@@ -35,6 +35,8 @@ mkdir -p /tmp/google_api_emulator_fixtures
 `/tmp/google_api_emulator_fixtures/gmail.json` should include that user’s email, at least two messages (one `UNREAD`), a draft, and `attachments` on a message (`filename`, `mimeType`, plus `text` or base64 `data`). Mailboxes are keyed by email matching a People user.
 
 `/tmp/google_api_emulator_fixtures/calendar.json` should include that user’s email, a primary calendar (`id` `primary` or omitted), `timeZone`, and at least two events (one timed `dateTime`, one all-day `date`).
+
+`/tmp/google_api_emulator_fixtures/places.json` should include at least three places (different `primaryType`s) with `id`, `displayName`, `formattedAddress`, `location`, and `types`. Places is a global catalog, not keyed by People email.
 
 ### 2. Start the emulator
 
@@ -116,6 +118,15 @@ Calendar:
 - `calendar.freebusy().query` with `timeMin`/`timeMax` and `items=[{"id":"primary"}]` returns busy times
 - Request without `Authorization` to `/services/calendar/calendar/v3/calendars/primary/events` is 401 `UNAUTHENTICATED`
 
+Places (httpx; `X-Goog-Api-Key: verify-token`):
+
+- `POST /services/places/v1/places:searchText` with `X-Goog-FieldMask: places.displayName,places.id` and `{"textQuery":"..."}` hits a fixture
+- `POST /services/places/v1/places:searchNearby` with `locationRestriction.circle` around a fixture includes that place and a far circle does not
+- `GET /services/places/v1/places/{id}` with `X-Goog-FieldMask: id,displayName` is the fixture; missing id is 404
+- `POST /services/places/v1/places:autocomplete` with a name prefix returns `suggestions[].placePrediction`
+- No key and no Bearer → 401 `UNAUTHENTICATED`
+- Omit field mask → 400 `INVALID_ARGUMENT`
+
 Stop the server when done. Do not leave uvicorn on 18080.
 
 ## Layout
@@ -124,7 +135,8 @@ Stop the server when done. Do not leave uvicorn on 18080.
 - `src/google_api_emulator/services/people/` — People routes, store, field masks, search
 - `src/google_api_emulator/services/gmail/` — Gmail routes, MIME, mailbox store
 - `src/google_api_emulator/services/calendar/` — Calendar routes, calendars, events, freeBusy
-- `fixtures/people.json`, `fixtures/gmail.json`, `fixtures/calendar.json` — per-API seeds
+- `src/google_api_emulator/services/places/` — Places (New) search, nearby, details, autocomplete
+- `fixtures/people.json`, `fixtures/gmail.json`, `fixtures/calendar.json`, `fixtures/places.json` — per-API seeds
 - `tests/` — pytest + httpx `TestClient`
 
 New Google APIs go in `services/{name}/` and mount at `/services/{name}` with Google’s published path after that prefix:
@@ -134,6 +146,7 @@ New Google APIs go in `services/{name}/` and mount at `/services/{name}` with Go
 | People | `/services/people` (`people.googleapis.com`) | `/v1/...` |
 | Gmail | `/services/gmail` (`gmail.googleapis.com`) | `/gmail/v1/...` |
 | Calendar | `/services/calendar` (`www.googleapis.com`) | `/calendar/v3/...` |
+| Places | `/services/places` (`places.googleapis.com`) | `/v1/places...` |
 
 Do not flatten everything to `/v1/...`.
 
@@ -141,15 +154,16 @@ Do not flatten everything to `/v1/...`.
 
 - Wire JSON is proto-JSON **camelCase**. Never snake_case on `/services/...` responses.
 - Errors: `{"error": {"code": 401, "message": "...", "status": "UNAUTHENTICATED"}}`
-- `/services/...` requires `Authorization: Bearer <token>`. `/health` and `POST /reset` do not.
+- `/services/...` requires `Authorization: Bearer <token>` except Places, which also accepts `X-Goog-Api-Key` or `key`. `/health` and `POST /reset` do not.
 - `fixtures/allowed_tokens.json` is optional. Absent → accept any token. Present → only those tokens. Empty list → reject all.
 - Token listed on a `people.json` user selects that user; otherwise the first fixture user.
 - Startup and `POST /reset` drop SQLite and reload fixtures. The DB file is a working copy, not durable account state.
 - People: honor required `personFields` / `readMask` / `updatePersonFields`; generate etags; `updateContact` must 400 on missing or mismatched etag; `people/me` is the authenticated profile; search is prefix-phrase match; empty search `query` is a warmup and returns no results.
 - Gmail: `userId` is `me` or the authenticated email (else 403); list returns `{id, threadId}` only; honor `format`, `q`, `labelIds`, `includeSpamTrash`; send uses base64url RFC822; system labels cannot be deleted.
 - Calendar: `calendarId` is `primary` or the calendar id (primary id is the user email); honor `timeMin`/`timeMax`/`q`; insert requires `start` and `end`; delete sets `status=cancelled`; `If-Match` (or body `etag`) mismatch is 412.
+- Places: catalog is global; `X-Goog-FieldMask` (or `fields` / `$fields`) is required; searchText needs `textQuery`; searchNearby needs `locationRestriction.circle`; autocomplete empty `input` returns no suggestions.
 
-Out of scope unless asked: OAuth/OIDC, discovery docs, quotas, contact groups, directory, photos, sync tokens, batch mutate, Gmail settings/CSE/watch/history/import, Calendar ACL/watch/settings/recurring expansion, multi-worker.
+Out of scope unless asked: OAuth/OIDC, discovery docs, quotas, contact groups, directory, photos, sync tokens, batch mutate, Gmail settings/CSE/watch/history/import, Calendar ACL/watch/settings/recurring expansion, Place Photos/routing/session tokens, Places API (Legacy), multi-worker.
 
 ## Adding an API
 

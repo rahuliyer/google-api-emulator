@@ -70,3 +70,21 @@ def require_user(request: Request) -> User:
         profile_resource_name=default["resource_name"],
         token=token,
     )
+
+
+def require_places_credential(request: Request) -> str:
+    header = request.headers.get("Authorization")
+    token = ""
+    if header and header.startswith("Bearer "):
+        token = header.removeprefix("Bearer ").strip()
+    if not token:
+        token = (request.headers.get("X-Goog-Api-Key") or "").strip()
+    if not token:
+        token = (request.query_params.get("key") or "").strip()
+    if not token:
+        raise unauthenticated("Request is missing required authentication credential.")
+
+    state = _state(request)
+    if state.allowed_tokens is not None and token not in state.allowed_tokens:
+        raise unauthenticated("Request had invalid authentication credentials.")
+    return token

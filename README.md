@@ -2,7 +2,7 @@
 
 Local stand-in for Google APIs so you can test an agent without hitting production. Swap the Google host for this process; request paths, JSON, field masks, etags, and errors stay Google-shaped.
 
-People, Gmail, and Calendar are implemented.
+People, Gmail, Calendar, and Places (New) are implemented.
 
 ## Run
 
@@ -70,6 +70,26 @@ GET /services/calendar/calendar/v3/calendars/primary/events
 Authorization: Bearer any-token
 ```
 
+## Point an agent at Places
+
+Replace `https://places.googleapis.com` with:
+
+```text
+http://127.0.0.1:8080/services/places
+```
+
+Places (New) uses an API key and a required field mask:
+
+```http
+POST /services/places/v1/places:searchText
+X-Goog-Api-Key: any-token
+X-Goog-FieldMask: places.id,places.displayName
+
+{"textQuery": "coffee"}
+```
+
+`Authorization: Bearer` is also accepted. `google-maps-places` clients that replace the host should set `api_endpoint` to `http://127.0.0.1:8080/services/places` and `transport="rest"`.
+
 ## Point an agent at People
 
 Replace `https://people.googleapis.com` with:
@@ -106,12 +126,13 @@ Later APIs keep Google’s published path after `/services/{name}`:
 | People | `http://127.0.0.1:8080/services/people` | `/services/people/v1/people/me/connections` |
 | Gmail | `http://127.0.0.1:8080/services/gmail` | `/services/gmail/gmail/v1/users/me/messages` |
 | Calendar | `http://127.0.0.1:8080/services/calendar` | `/services/calendar/calendar/v3/calendars/primary/events` |
+| Places | `http://127.0.0.1:8080/services/places` | `/services/places/v1/places:searchText` |
 
 Calendar client libraries that replace `rootUrl + servicePath` (`google-api-python-client`) should set `api_endpoint` to `http://127.0.0.1:8080/services/calendar`. Host-swap HTTP still uses `/services/calendar/calendar/v3/...`.
 
 ## Auth
 
-Every `/services/...` route requires `Authorization: Bearer <token>`. Missing or non-Bearer credentials return Google’s `UNAUTHENTICATED` error body.
+Every `/services/...` route requires credentials. People, Gmail, and Calendar need `Authorization: Bearer <token>`. Places also accepts `X-Goog-Api-Key` or `key`. Missing credentials return Google’s `UNAUTHENTICATED` error body.
 
 - If `fixtures/allowed_tokens.json` is **absent**, any non-empty token is accepted.
 - If it is **present**, only listed tokens are accepted.
@@ -126,7 +147,7 @@ If the token appears on a user in `fixtures/people.json`, that user’s contacts
 
 ## Fixtures
 
-One JSON file per API: [`fixtures/people.json`](fixtures/people.json), [`fixtures/gmail.json`](fixtures/gmail.json), [`fixtures/calendar.json`](fixtures/calendar.json). Gmail mailboxes and Calendar accounts are keyed by email and must match a People user.
+One JSON file per API: [`fixtures/people.json`](fixtures/people.json), [`fixtures/gmail.json`](fixtures/gmail.json), [`fixtures/calendar.json`](fixtures/calendar.json), [`fixtures/places.json`](fixtures/places.json). Gmail mailboxes and Calendar accounts are keyed by email and must match a People user. Places is a global catalog.
 
 `POST /reset` reloads every fixture file in the directory (including `allowed_tokens.json` if you add it).
 
@@ -147,6 +168,19 @@ Calendar events use Google’s `start`/`end` objects (`dateTime` or all-day `dat
   "summary": "Lunch with Bob",
   "start": { "dateTime": "2026-01-15T12:00:00-08:00" },
   "end": { "dateTime": "2026-01-15T13:00:00-08:00" }
+}
+```
+
+Places fixtures are Place objects (`id`, `displayName`, `location`, `types`):
+
+```json
+{
+  "id": "ChIJCafe1",
+  "displayName": { "text": "Blue Bottle Coffee", "languageCode": "en" },
+  "formattedAddress": "1 Ferry Building, San Francisco, CA 94111",
+  "location": { "latitude": 37.7955, "longitude": -122.3937 },
+  "types": ["cafe", "coffee_shop"],
+  "primaryType": "cafe"
 }
 ```
 
@@ -205,6 +239,17 @@ Not in this slice: contact groups, directory people, photos, sync tokens, batch 
 | POST | `/services/calendar/calendar/v3/freeBusy` |
 
 `calendarId` is `primary` or the calendar id (the primary id is the user’s email). Not in this slice: ACL, watch, settings, colors, recurring instance expansion, import/move/quickAdd.
+
+## Places API coverage
+
+| Method | Path |
+| --- | --- |
+| POST | `/services/places/v1/places:searchText` |
+| POST | `/services/places/v1/places:searchNearby` |
+| POST | `/services/places/v1/places:autocomplete` |
+| GET | `/services/places/v1/places/{placeId}` |
+
+`X-Goog-FieldMask` (or `fields` / `$fields`) is required. Auth is `X-Goog-Api-Key` or Bearer. Not in this slice: photos, routing, session tokens, Places API (Legacy).
 
 ## Tests
 

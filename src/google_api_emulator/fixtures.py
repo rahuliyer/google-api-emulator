@@ -313,3 +313,37 @@ def seed_calendar(db: Database, fixture: CalendarFixtureFile | None) -> None:
 
 def resource_id(resource: dict) -> str:
     return resource["id"][:12]
+
+
+class PlaceFixture(BaseModel):
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    id: str
+    name: str | None = None
+
+    def as_place(self) -> dict[str, Any]:
+        data = self.model_dump(exclude_none=True)
+        data["id"] = self.id
+        data["name"] = self.name or f"places/{self.id}"
+        return data
+
+
+class PlacesFixtureFile(BaseModel):
+    places: list[PlaceFixture] = Field(default_factory=list)
+
+
+def load_places_fixture(fixtures_dir: Path) -> PlacesFixtureFile | None:
+    path = fixtures_dir / "places.json"
+    if not path.is_file():
+        return None
+    return PlacesFixtureFile.model_validate_json(path.read_text())
+
+
+def seed_places(db: Database, fixture: PlacesFixtureFile | None) -> None:
+    if fixture is None:
+        return
+    from google_api_emulator.services.places.store import PlacesStore
+
+    store = PlacesStore(db)
+    for place in fixture.places:
+        store.upsert(place.as_place())
