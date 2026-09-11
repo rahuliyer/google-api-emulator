@@ -20,14 +20,38 @@ def _state(request: Request) -> EmulatorState:
     return request.app.state.emulator
 
 
-def require_user(request: Request) -> User:
+def bearer_token(request: Request) -> str:
     header = request.headers.get("Authorization")
     if not header or not header.startswith("Bearer "):
         raise unauthenticated("Request is missing required authentication credential.")
     token = header.removeprefix("Bearer ").strip()
     if not token:
         raise unauthenticated("Request is missing required authentication credential.")
+    return token
 
+
+def routes_token(request: Request) -> str:
+    header = request.headers.get("Authorization")
+    if header and header.startswith("Bearer "):
+        token = header.removeprefix("Bearer ").strip()
+        if token:
+            return token
+        raise unauthenticated("Request is missing required authentication credential.")
+    api_key = (request.headers.get("x-goog-api-key") or "").strip()
+    if api_key:
+        return api_key
+    raise unauthenticated("Request is missing required authentication credential.")
+
+
+def require_user(request: Request) -> User:
+    return user_from_token(request, bearer_token(request))
+
+
+def require_routes_user(request: Request) -> User:
+    return user_from_token(request, routes_token(request))
+
+
+def user_from_token(request: Request, token: str) -> User:
     state = _state(request)
     if state.allowed_tokens is not None and token not in state.allowed_tokens:
         raise unauthenticated("Request had invalid authentication credentials.")

@@ -10,10 +10,12 @@ from google_api_emulator.fixtures import (
     load_gmail_fixture,
     load_people_fixture,
     load_places_fixture,
+    load_routes_fixture,
     seed_calendar,
     seed_gmail,
     seed_people,
     seed_places,
+    seed_routes,
 )
 
 
@@ -31,5 +33,6 @@ class EmulatorState:
         seed_gmail(self.db, load_gmail_fixture(self.settings.fixtures_dir))
         seed_calendar(self.db, load_calendar_fixture(self.settings.fixtures_dir))
         seed_places(self.db, load_places_fixture(self.settings.fixtures_dir))
+        seed_routes(self.db, load_routes_fixture(self.settings.fixtures_dir))
         self.allowed_tokens = load_allowed_tokens(self.settings.fixtures_dir)
         self.default_user_id = fixture.users[0].id if fixture.users else None
